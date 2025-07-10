@@ -1,0 +1,29 @@
+<!-- 
+Crear archivo favicon.ico:
+Puedes usar cualquier generador online de favicon o crear uno simple.
+Aquí tienes el código para generar un favicon básico con texto:
+-->
+
+<!-- Favicon simple con CSS/HTML que puedes convertir a ICO -->
+<svg width="32" height="32" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" fill="url(#grad)" rx="6"/>
+  <text x="16" y="22" font-family="Arial, sans-serif" font-size="18" font-weight="bold" 
+        text-anchor="middle" fill="white">🔗</text>
+</svg>
+
+<!-- 
+Para crear el favicon.ico real:
+1. Guarda el SVG anterior como favicon.svg
+2. Usa una herramienta online como https://www.favicon-generator.org/
+3. O usa ImageMagick: convert favicon.svg -resize 32x32 favicon.ico
+4. O simplemente usa el emoji 🔗 como favicon
+-->
+
+<!-- Alternativamente, puedes usar esta etiqueta en el head de tus páginas: -->
+<!-- <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔗</text></svg>"> -->
