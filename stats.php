@@ -1,13 +1,10 @@
 <?php
 require_once 'conf.php';
-
 // Verificar que se proporcione un código
 if (!isset($_GET['code']) || empty($_GET['code'])) {
     die('No se proporcionó código de URL');
 }
-
 $code = $_GET['code'];
-
 try {
     $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -45,7 +42,7 @@ try {
         <div class="card mt-4">
             <div class="card-body">
                 <h5>URL Corta:</h5>
-                <p><a href="<?php echo BASE_URL . $code; ?>"><?php echo BASE_URL . $code; ?></a></p>
+                <p><a href="<?php echo rtrim(BASE_URL, '/') . '/' . $code; ?>"><?php echo rtrim(BASE_URL, '/') . '/' . $code; ?></a></p>
                 
                 <h5>URL Original:</h5>
                 <p><a href="<?php echo htmlspecialchars($url['original_url']); ?>" target="_blank">

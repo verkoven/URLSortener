@@ -76,43 +76,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['url'])) {
             $message = 'Por favor, introduce una URL válida';
             $messageType = 'danger';
         } else {
-            try {
-                // Verificar si la URL ya existe para este usuario
-                $stmt = $pdo->prepare("SELECT short_code FROM urls WHERE original_url = ? AND user_id = ?");
-                $stmt->execute([$url, $_SESSION['user_id']]);
-                $existing = $stmt->fetch();
-                
-                if ($existing) {
-                    // URL ya existe, devolver el código existente
-                    $shortCode = $existing['short_code'];
-                    $message = 'Esta URL ya fue acortada anteriormente';
-                    $messageType = 'info';
-                } else {
-                    // Generar nuevo código único
-                    do {
-                        $shortCode = generateShortCode();
-                        $stmt = $pdo->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
-                        $stmt->execute([$shortCode]);
-                        $exists = $stmt->fetchColumn();
-                    } while ($exists > 0);
-                    
-                    // Obtener el ID del usuario
-                    $user_id = $_SESSION['user_id'];
-                    
-                    // Insertar nueva URL con user_id
-                    $stmt = $pdo->prepare("INSERT INTO urls (short_code, original_url, user_id, created_at) VALUES (?, ?, ?, NOW())");
-                    $stmt->execute([$shortCode, $url, $user_id]);
-                    
-                    $message = '¡URL acortada con éxito!';
-                    $messageType = 'success';
-                }
-                
-                $shortUrl = BASE_URL . $shortCode;
-                
-            } catch (PDOException $e) {
-                $message = 'Error al procesar la URL';
+            // NUEVO: Verificar que la URL existe
+            $headers = @get_headers($url);
+            
+            if (!$headers || (strpos($headers[0], '200') === false && 
+                             strpos($headers[0], '301') === false && 
+                             strpos($headers[0], '302') === false)) {
+                $message = '❌ La URL no existe o no es accesible. Por favor, verifica que sea correcta.';
                 $messageType = 'danger';
-                error_log($e->getMessage());
+            } else {
+                // URL válida, continuar con el proceso normal
+                try {
+                    // Verificar si la URL ya existe para este usuario
+                    $stmt = $pdo->prepare("SELECT short_code FROM urls WHERE original_url = ? AND user_id = ?");
+                    $stmt->execute([$url, $_SESSION['user_id']]);
+                    $existing = $stmt->fetch();
+                    
+                    if ($existing) {
+                        // URL ya existe, devolver el código existente
+                        $shortCode = $existing['short_code'];
+                        $message = 'Esta URL ya fue acortada anteriormente';
+                        $messageType = 'info';
+                    } else {
+                        // Generar nuevo código único
+                        do {
+                            $shortCode = generateShortCode();
+                            $stmt = $pdo->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
+                            $stmt->execute([$shortCode]);
+                            $exists = $stmt->fetchColumn();
+                        } while ($exists > 0);
+                        
+                        // Obtener el ID del usuario
+                        $user_id = $_SESSION['user_id'];
+                        
+                        // Insertar nueva URL con user_id
+                        $stmt = $pdo->prepare("INSERT INTO urls (short_code, original_url, user_id, created_at) VALUES (?, ?, ?, NOW())");
+                        $stmt->execute([$shortCode, $url, $user_id]);
+                        
+                        $message = '✅ ¡URL acortada con éxito!';
+                        $messageType = 'success';
+                    }
+                    
+                    $shortUrl = BASE_URL . $shortCode;
+                    
+                } catch (PDOException $e) {
+                    $message = 'Error al procesar la URL';
+                    $messageType = 'danger';
+                    error_log($e->getMessage());
+                }
             }
         }
     }
@@ -295,7 +306,7 @@ if ($user_logged_in) {
     </style>
 </head>
 <body>
-    <?php include 'menu.php'; ?>
+    <?php if (file_exists('menu.php')) include 'menu.php'; ?>
     
     <div class="container main-container">
         <div class="row">
@@ -312,7 +323,7 @@ if ($user_logged_in) {
                             <small>Has creado <?php echo $userUrls; ?> URLs con <?php echo number_format($userClicks); ?> clicks</small>
                         </div>
                         <div class="col-4 text-end">
-                            <a href="admin/panel_simple.php" class="btn btn-light btn-sm">
+                            <a href="<?php echo BASE_URL; ?>admin/panel_simple.php" class="btn btn-light btn-sm">
                                 <i class="bi bi-speedometer2"></i> Mi Panel
                             </a>
                         </div>
@@ -364,7 +375,7 @@ if ($user_logged_in) {
                                     <a href="<?php echo $shortUrl; ?>" target="_blank" class="btn btn-info">
                                         <i class="bi bi-box-arrow-up-right"></i> Abrir
                                     </a>
-                                    <a href="stats.php?code=<?php echo $shortCode; ?>" class="btn btn-warning">
+                                    <a href="<?php echo BASE_URL; ?>stats.php?code=<?php echo $shortCode; ?>" class="btn btn-warning">
                                         <i class="bi bi-graph-up"></i> Stats
                                     </a>
                                 </div>
@@ -432,7 +443,7 @@ if ($user_logged_in) {
                             </table>
                         </div>
                         <div class="text-center mt-3">
-                            <a href="admin/panel_simple.php" class="btn btn-primary btn-sm">
+                            <a href="<?php echo BASE_URL; ?>admin/panel_simple.php" class="btn btn-primary btn-sm">
                                 Ver todas tus URLs
                             </a>
                         </div>
@@ -526,7 +537,7 @@ if ($user_logged_in) {
                         </div>
                         
                         <div class="d-grid gap-2">
-                            <a href="admin/login.php" class="btn btn-outline-primary">
+                            <a href="<?php echo BASE_URL; ?>admin/login.php" class="btn btn-outline-primary">
                                 <i class="bi bi-person-plus"></i> Ir a la página de login
                             </a>
                         </div>
@@ -547,10 +558,10 @@ if ($user_logged_in) {
             <p class="text-muted mb-0">
                 URL Shortener © <?php echo date('Y'); ?>
                 <?php if ($user_logged_in): ?>
-                    | <a href="admin/panel_simple.php">Panel Admin</a>
-                    | <a href="admin/logout.php">Cerrar sesión</a>
+                    | <a href="<?php echo BASE_URL; ?>admin/panel_simple.php">Panel Admin</a>
+                    | <a href="<?php echo BASE_URL; ?>admin/logout.php">Cerrar sesión</a>
                 <?php else: ?>
-                    | <a href="admin/login.php">Iniciar sesión</a>
+                    | <a href="<?php echo BASE_URL; ?>admin/login.php">Iniciar sesión</a>
                 <?php endif; ?>
             </p>
         </div>

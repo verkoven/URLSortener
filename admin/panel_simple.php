@@ -487,7 +487,7 @@ if ($section === 'urls') {
                                         <td>
                                             <span class="url-code"><?php echo htmlspecialchars($url['short_code']); ?></span>
                                             <br>
-                                            <a href="<?php echo BASE_URL . $url['short_code']; ?>" 
+                                            <a href="<?php echo rtrim(BASE_URL, '/') . '/' . $url['short_code']; ?>" 
                                                target="_blank" 
                                                style="font-size: 12px; color: #007bff;">
                                                 Ver →
