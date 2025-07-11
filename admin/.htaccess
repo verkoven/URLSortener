@@ -1,0 +1,8 @@
+# Desactivar listado de directorios
+Options -Indexes
+
+# Denegar acceso a archivos PHP excepto los permitidos
+<FilesMatch "\.php$">
+    Order Allow,Deny
+    Allow from all
+</FilesMatch>
