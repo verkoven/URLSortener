@@ -4,7 +4,6 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
     header('Location: login.php');
     exit;
 }
-
 require_once '../conf.php';
 
 // Conexión a la base de datos
@@ -18,17 +17,31 @@ try {
 $message = '';
 $section = $_GET['section'] ?? 'dashboard';
 
+// Obtener información del usuario actual
+$user_id = $_SESSION['user_id'];
+$user_role = $_SESSION['role'] ?? 'user';
+$is_admin = ($user_role === 'admin');
+
 // Procesar eliminación
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_url_id'])) {
     $id = (int)$_POST['delete_url_id'];
     try {
-        // Eliminar estadísticas relacionadas
-        $stmt = $db->prepare("DELETE FROM click_stats WHERE url_id = ?");
-        $stmt->execute([$id]);
-        
-        // Eliminar URL
-        $stmt = $db->prepare("DELETE FROM urls WHERE id = ?");
-        $stmt->execute([$id]);
+        // Verificar que el usuario puede eliminar esta URL
+        if ($is_admin) {
+            // Admin puede eliminar cualquier URL
+            $stmt = $db->prepare("DELETE FROM click_stats WHERE url_id = ?");
+            $stmt->execute([$id]);
+            
+            $stmt = $db->prepare("DELETE FROM urls WHERE id = ?");
+            $stmt->execute([$id]);
+        } else {
+            // Usuario normal solo puede eliminar sus propias URLs
+            $stmt = $db->prepare("DELETE FROM click_stats WHERE url_id IN (SELECT id FROM urls WHERE id = ? AND user_id = ?)");
+            $stmt->execute([$id, $user_id]);
+            
+            $stmt = $db->prepare("DELETE FROM urls WHERE id = ? AND user_id = ?");
+            $stmt->execute([$id, $user_id]);
+        }
         
         $message = "URL eliminada correctamente";
     } catch (PDOException $e) {
@@ -38,20 +51,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_url_id'])) {
 
 // Obtener estadísticas básicas
 try {
-    $stmt = $db->query("SELECT COUNT(*) as total_urls FROM urls");
-    $total_urls = $stmt->fetch()['total_urls'];
-    
-    $stmt = $db->query("SELECT SUM(clicks) as total_clicks FROM urls");
-    $total_clicks = $stmt->fetch()['total_clicks'] ?? 0;
+    if ($is_admin) {
+        // Admin ve estadísticas globales
+        $stmt = $db->query("SELECT COUNT(*) as total_urls FROM urls");
+        $total_urls = $stmt->fetch()['total_urls'];
+        
+        $stmt = $db->query("SELECT SUM(clicks) as total_clicks FROM urls");
+        $total_clicks = $stmt->fetch()['total_clicks'] ?? 0;
+        
+        $stmt = $db->query("SELECT COUNT(*) as total_users FROM users");
+        $total_users = $stmt->fetch()['total_users'];
+        
+        $stmt = $db->query("SELECT COUNT(*) as active_users FROM users WHERE status = 'active'");
+        $active_users = $stmt->fetch()['active_users'];
+    } else {
+        // Usuario normal ve solo sus estadísticas
+        $stmt = $db->prepare("SELECT COUNT(*) as total_urls FROM urls WHERE user_id = ?");
+        $stmt->execute([$user_id]);
+        $total_urls = $stmt->fetch()['total_urls'];
+        
+        $stmt = $db->prepare("SELECT SUM(clicks) as total_clicks FROM urls WHERE user_id = ?");
+        $stmt->execute([$user_id]);
+        $total_clicks = $stmt->fetch()['total_clicks'] ?? 0;
+        
+        // Los usuarios normales no ven estadísticas de otros usuarios
+        $total_users = 0;
+        $active_users = 0;
+    }
     
     $avg_clicks = $total_urls > 0 ? round($total_clicks / $total_urls, 1) : 0;
-    
-    // AÑADIDO: Estadísticas de usuarios
-    $stmt = $db->query("SELECT COUNT(*) as total_users FROM users");
-    $total_users = $stmt->fetch()['total_users'];
-    
-    $stmt = $db->query("SELECT COUNT(*) as active_users FROM users WHERE status = 'active'");
-    $active_users = $stmt->fetch()['active_users'];
     
 } catch (PDOException $e) {
     $total_urls = 0;
@@ -61,17 +89,31 @@ try {
     $active_users = 0;
 }
 
-// Obtener URLs si estamos en esa sección - MODIFICADO: incluir usuario
+// Obtener URLs si estamos en esa sección
 $urls = [];
 if ($section === 'urls') {
     try {
-        $stmt = $db->query("
-            SELECT u.*, users.username 
-            FROM urls u
-            LEFT JOIN users ON u.user_id = users.id
-            ORDER BY u.created_at DESC 
-            LIMIT 100
-        ");
+        if ($is_admin) {
+            // Admin ve todas las URLs
+            $stmt = $db->query("
+                SELECT u.*, users.username 
+                FROM urls u
+                LEFT JOIN users ON u.user_id = users.id
+                ORDER BY u.created_at DESC 
+                LIMIT 100
+            ");
+        } else {
+            // Usuario normal ve solo sus URLs
+            $stmt = $db->prepare("
+                SELECT u.*, users.username 
+                FROM urls u
+                LEFT JOIN users ON u.user_id = users.id
+                WHERE u.user_id = ?
+                ORDER BY u.created_at DESC 
+                LIMIT 100
+            ");
+            $stmt->execute([$user_id]);
+        }
         $urls = $stmt->fetchAll();
     } catch (PDOException $e) {
         $message = "Error obteniendo URLs: " . $e->getMessage();
@@ -311,92 +353,89 @@ if ($section === 'urls') {
             max-width: 800px;
             margin: 0 auto;
         }
+        /* Menú simple sin botones no deseados */
+        .simple-menu {
+            background-color: #3a4149;
+            padding: 15px 0;
+            color: white;
+        }
+        .simple-menu-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .menu-title {
+            font-size: 1.5em;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .menu-links {
+            display: flex;
+            gap: 20px;
+        }
+        .menu-links a {
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            transition: background 0.3s;
+        }
+        .menu-links a:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        .menu-links .btn-acortador {
+            background: #28a745;
+        }
+        .menu-links .btn-salir {
+            background: #dc3545;
+        }
     </style>
 </head>
 <body>
-    <!-- Menú simple sin botones no deseados -->
-<style>
-    .simple-menu {
-        background-color: #3a4149;
-        padding: 15px 0;
-        color: white;
-    }
-    .simple-menu-container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 0 20px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-    .menu-title {
-        font-size: 1.5em;
-        font-weight: bold;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    .menu-links {
-        display: flex;
-        gap: 20px;
-    }
-    .menu-links a {
-        color: white;
-        text-decoration: none;
-        padding: 8px 16px;
-        border-radius: 5px;
-        transition: background 0.3s;
-    }
-    .menu-links a:hover {
-        background: rgba(255,255,255,0.1);
-    }
-    .menu-links .btn-acortador {
-        background: #28a745;
-    }
-    .menu-links .btn-salir {
-        background: #dc3545;
-    }
-</style>
-<div class="simple-menu">
-    <div class="simple-menu-container">
-        <div class="menu-title">
-            🌐 Acortador URL
-        </div>
-        <div class="menu-links">
-            <a href="../" class="btn-acortador">🔗 Acortador</a>
-            <a href="logout.php" class="btn-salir">🚪 Salir</a>
+    <div class="simple-menu">
+        <div class="simple-menu-container">
+            <div class="menu-title">
+                🌐 Acortador URL
+            </div>
+            <div class="menu-links">
+                <a href="../" class="btn-acortador">🔗 Acortador</a>
+                <a href="logout.php" class="btn-salir">🚪 Salir</a>
+            </div>
         </div>
     </div>
-</div>
     
     <div class="header">
-        <h1>🔗 Panel de Administración</h1>
+        <h1>🔗 Panel de <?php echo $is_admin ? 'Administración' : 'Usuario'; ?></h1>
         <p>Usuario: <?php echo htmlspecialchars($_SESSION['username'] ?? 'Admin'); ?>
-        <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
+        <?php if ($is_admin): ?>
             <span style="background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 4px; margin-left: 10px;">Admin</span>
         <?php endif; ?>
         </p>
     </div>
-
+    
     <div class="container">
         <div class="back-links">
             <a href="../">🏠 Ir al Acortador</a>
             <a href="logout.php">🚪 Cerrar Sesión</a>
         </div>
-
+        
         <!-- Navegación con pestañas -->
         <div class="nav">
             <a href="?section=dashboard" class="<?php echo $section === 'dashboard' ? 'active' : ''; ?>">
                 📊 Dashboard
             </a>
             <a href="?section=urls" class="<?php echo $section === 'urls' ? 'active' : ''; ?>">
-                🔗 Gestión URLs
+                🔗 <?php echo $is_admin ? 'Gestión URLs' : 'Mis URLs'; ?>
             </a>
-            <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
+            <?php if ($is_admin): ?>
             <a href="usuarios.php">
                 👥 Gestión Usuarios
             </a>
-            <?php endif; ?>
             <a href="mapa_simple.php">
                 🗺️ Mapa Global
             </a>
@@ -406,28 +445,31 @@ if ($section === 'urls') {
             <a href="ver_coordenadas.php">
                 📍 Ver Coordenadas
             </a>
+            <?php endif; ?>
         </div>
-
+        
         <?php if ($message): ?>
             <div class="message"><?php echo htmlspecialchars($message); ?></div>
         <?php endif; ?>
-
+        
         <?php if ($section === 'dashboard'): ?>
             <!-- Dashboard principal -->
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-number"><?php echo number_format($total_urls); ?></div>
-                    <div class="stat-label">Total URLs</div>
+                    <div class="stat-label"><?php echo $is_admin ? 'Total URLs' : 'Mis URLs'; ?></div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number"><?php echo number_format($total_clicks); ?></div>
-                    <div class="stat-label">Total Clicks</div>
+                    <div class="stat-label"><?php echo $is_admin ? 'Total Clicks' : 'Mis Clicks'; ?></div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-number"><?php echo $avg_clicks; ?></div>
                     <div class="stat-label">Promedio Clicks/URL</div>
                 </div>
-                <!-- AÑADIDO: Estadísticas de usuarios -->
+                
+                <?php if ($is_admin): ?>
+                <!-- Solo admin ve estadísticas de usuarios -->
                 <div class="stat-card">
                     <div class="stat-number"><?php echo number_format($total_users); ?></div>
                     <div class="stat-label">Total Usuarios</div>
@@ -436,34 +478,35 @@ if ($section === 'urls') {
                     <div class="stat-number"><?php echo number_format($active_users); ?></div>
                     <div class="stat-label">Usuarios Activos</div>
                 </div>
+                <?php endif; ?>
             </div>
-
+            
             <!-- Botones de acceso rápido -->
             <div class="quick-actions">
                 <h3>🚀 Acciones Rápidas</h3>
                 <div class="action-grid">
                     <a href="?section=urls" class="btn btn-primary">
-                        🔗 Gestionar URLs
+                        🔗 <?php echo $is_admin ? 'Gestionar URLs' : 'Ver mis URLs'; ?>
                     </a>
                     <a href="../" class="btn btn-success">
                         ➕ Crear Nueva URL
                     </a>
+                    <?php if ($is_admin): ?>
                     <a href="stats.php" class="btn btn-info">
                         📈 Estadísticas Detalladas
                     </a>
-                    <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'admin'): ?>
                     <a href="usuarios.php" class="btn btn-warning">
                         👥 Gestionar Usuarios
                     </a>
                     <?php endif; ?>
                 </div>
             </div>
-
+            
         <?php elseif ($section === 'urls'): ?>
             <!-- Gestión de URLs -->
             <div class="card">
                 <div class="card-header">
-                    🔗 URLs Acortadas (<?php echo count($urls); ?> registradas)
+                    🔗 <?php echo $is_admin ? 'URLs Acortadas' : 'Mis URLs'; ?> (<?php echo count($urls); ?> registradas)
                 </div>
                 <div class="card-body">
                     <div class="overflow-x">
@@ -471,9 +514,11 @@ if ($section === 'urls') {
                             <thead>
                                 <tr>
                                     <th>ID</th>
-                                    <th>Código</th>
+                                    <th>URL Corta</th>
                                     <th>URL Original</th>
-                                    <th>Usuario</th> <!-- AÑADIDO -->
+                                    <?php if ($is_admin): ?>
+                                    <th>Usuario</th>
+                                    <?php endif; ?>
                                     <th>Clicks</th>
                                     <th>Creada</th>
                                     <th>Acciones</th>
@@ -485,13 +530,22 @@ if ($section === 'urls') {
                                     <tr>
                                         <td><?php echo $url['id']; ?></td>
                                         <td>
-                                            <span class="url-code"><?php echo htmlspecialchars($url['short_code']); ?></span>
-                                            <br>
-                                            <a href="<?php echo rtrim(BASE_URL, '/') . '/' . $url['short_code']; ?>" 
-                                               target="_blank" 
-                                               style="font-size: 12px; color: #007bff;">
-                                                Ver →
-                                            </a>
+                                            <div style="margin-bottom: 5px;">
+                                                <span class="url-code"><?php echo htmlspecialchars($url['short_code']); ?></span>
+                                            </div>
+                                            <div style="background: #f8f9fa; padding: 8px; border-radius: 4px; font-size: 13px;">
+                                                <a href="<?php echo rtrim(BASE_URL, '/') . '/' . $url['short_code']; ?>" 
+                                                   target="_blank" 
+                                                   style="color: #007bff; text-decoration: none; word-break: break-all;"
+                                                   onmouseover="this.style.textDecoration='underline'" 
+                                                   onmouseout="this.style.textDecoration='none'">
+                                                    <?php echo rtrim(BASE_URL, '/') . '/' . $url['short_code']; ?>
+                                                </a>
+                                                <button onclick="copyUrl('<?php echo rtrim(BASE_URL, '/') . '/' . $url['short_code']; ?>')" 
+                                                        style="margin-left: 10px; padding: 2px 8px; font-size: 11px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                                                    📋 Copiar
+                                                </button>
+                                            </div>
                                         </td>
                                         <td>
                                             <a href="<?php echo htmlspecialchars($url['original_url']); ?>" 
@@ -501,10 +555,11 @@ if ($section === 'urls') {
                                                 <?php echo htmlspecialchars($url['original_url']); ?>
                                             </a>
                                         </td>
-                                        <!-- AÑADIDO: Columna usuario -->
+                                        <?php if ($is_admin): ?>
                                         <td>
                                             <?php echo $url['username'] ?? '<span style="color: #999;">-</span>'; ?>
                                         </td>
+                                        <?php endif; ?>
                                         <td><?php echo number_format($url['clicks'] ?? 0); ?></td>
                                         <td><?php echo date('d/m/Y H:i', strtotime($url['created_at'])); ?></td>
                                         <td>
@@ -517,7 +572,7 @@ if ($section === 'urls') {
                                     <?php endforeach; ?>
                                 <?php else: ?>
                                     <tr>
-                                        <td colspan="7" style="text-align: center; padding: 40px; color: #666;">
+                                        <td colspan="<?php echo $is_admin ? '7' : '6'; ?>" style="text-align: center; padding: 40px; color: #666;">
                                             No hay URLs registradas
                                         </td>
                                     </tr>
@@ -529,5 +584,23 @@ if ($section === 'urls') {
             </div>
         <?php endif; ?>
     </div>
+    
+    <script>
+    function copyUrl(url) {
+        // Crear elemento temporal
+        const temp = document.createElement('input');
+        temp.value = url;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+        
+        // Mostrar confirmación
+        event.target.textContent = '✅ Copiado!';
+        setTimeout(() => {
+            event.target.textContent = '📋 Copiar';
+        }, 2000);
+    }
+    </script>
 </body>
 </html>
