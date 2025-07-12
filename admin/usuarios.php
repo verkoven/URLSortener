@@ -27,6 +27,21 @@ try {
 
 $message = '';
 
+// Función para registrar auditoría
+function logAudit($user_id, $action, $old_value, $new_value) {
+    global $db, $_SESSION;
+    
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+    $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    
+    try {
+        $stmt = $db->prepare("INSERT INTO user_audit_log (user_id, action, old_value, new_value, changed_by, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->execute([$user_id, $action, $old_value, $new_value, $_SESSION['user_id'], $ip, $user_agent]);
+    } catch (PDOException $e) {
+        // Silenciosamente fallar si no existe la tabla
+    }
+}
+
 // Procesar acciones
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
@@ -65,9 +80,21 @@ function changeUserRole($user_id, $new_role) {
     }
     
     try {
+        // Obtener rol actual
+        $stmt = $db->prepare("SELECT role, username FROM users WHERE id = ?");
+        $stmt->execute([$user_id]);
+        $user = $stmt->fetch();
+        $old_role = $user['role'];
+        $username = $user['username'];
+        
+        // Actualizar rol
         $stmt = $db->prepare("UPDATE users SET role = ? WHERE id = ?");
         $stmt->execute([$new_role, $user_id]);
-        $message = "✅ Rol de usuario actualizado";
+        
+        // Registrar en auditoría
+        logAudit($user_id, 'role_change', $old_role, $new_role);
+        
+        $message = "✅ Rol de usuario '$username' actualizado de '$old_role' a '$new_role'";
     } catch (PDOException $e) {
         $message = "❌ Error al actualizar rol";
     }
@@ -104,6 +131,10 @@ function createUser() {
     try {
         $stmt = $db->prepare("INSERT INTO users (username, password, email, full_name, role, status) VALUES (?, ?, ?, ?, ?, 'active')");
         $stmt->execute([$username, $hashed_password, $email, $full_name, $role]);
+        
+        $new_user_id = $db->lastInsertId();
+        logAudit($new_user_id, 'user_created', null, $username);
+        
         $message = "✅ Usuario creado exitosamente";
         
     } catch (PDOException $e) {
@@ -137,6 +168,8 @@ function deleteUser($user_id) {
     }
     
     try {
+        logAudit($user_id, 'user_deleted', $username, null);
+        
         $stmt = $db->prepare("DELETE FROM users WHERE id = ?");
         $stmt->execute([$user_id]);
         $message = "✅ Usuario eliminado exitosamente";
@@ -158,6 +191,8 @@ function toggleUserStatus($user_id) {
         $current_status = $stmt->fetchColumn();
         
         $new_status = ($current_status == 'active') ? 'banned' : 'active';
+        
+        logAudit($user_id, 'status_change', $current_status, $new_status);
         
         $stmt = $db->prepare("UPDATE users SET status = ? WHERE id = ?");
         $stmt->execute([$new_status, $user_id]);
@@ -182,6 +217,8 @@ function updatePassword($user_id, $new_password) {
     $hashed_password = password_hash($new_password, PASSWORD_DEFAULT);
     
     try {
+        logAudit($user_id, 'password_changed', null, null);
+        
         $stmt = $db->prepare("UPDATE users SET password = ? WHERE id = ?");
         $stmt->execute([$hashed_password, $user_id]);
         $message = "✅ Contraseña actualizada exitosamente";
@@ -193,7 +230,13 @@ function updatePassword($user_id, $new_password) {
 // Obtener lista de usuarios con sus estadísticas
 $query = "SELECT u.*, 
           COUNT(DISTINCT urls.id) as total_urls,
-          COALESCE(SUM(urls.clicks), 0) as total_clicks
+          COALESCE(SUM(urls.clicks), 0) as total_clicks,
+          (SELECT CONCAT(changed_by_user.username, ' el ', DATE_FORMAT(al.changed_at, '%d/%m/%Y %H:%i'))
+           FROM user_audit_log al
+           LEFT JOIN users changed_by_user ON al.changed_by = changed_by_user.id
+           WHERE al.user_id = u.id AND al.action = 'role_change'
+           ORDER BY al.changed_at DESC
+           LIMIT 1) as last_role_change
           FROM users u
           LEFT JOIN urls ON urls.user_id = u.id
           GROUP BY u.id
@@ -481,6 +524,12 @@ $stats['admin_users'] = $db->query("SELECT COUNT(*) FROM users WHERE role = 'adm
             margin-bottom: 20px;
             text-align: center;
         }
+        .audit-info {
+            font-size: 11px;
+            color: #666;
+            font-style: italic;
+            margin-top: 2px;
+        }
     </style>
 </head>
 <body>
@@ -639,6 +688,11 @@ $stats['admin_users'] = $db->query("SELECT COUNT(*) FROM users WHERE role = 'adm
                                                 <option value="admin" <?php echo $user['role'] === 'admin' ? 'selected' : ''; ?>>Admin</option>
                                             </select>
                                         </form>
+                                        <?php if (!empty($user['last_role_change'])): ?>
+                                            <div class="audit-info">
+                                                Cambiado por <?php echo htmlspecialchars($user['last_role_change']); ?>
+                                            </div>
+                                        <?php endif; ?>
                                     <?php else: ?>
                                         <span class="badge badge-<?php echo $user['role'] === 'admin' ? 'danger' : 'info'; ?>">
                                             <?php echo ucfirst($user['role']); ?>
