@@ -14,6 +14,9 @@ if ($_SESSION['role'] !== 'admin') {
     exit();
 }
 
+// Verificar si es el super admin (definido en conf.php)
+$is_super_admin = ($_SESSION['username'] === ADMIN_USERNAME);
+
 // Conectar a la base de datos
 try {
     $db = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
@@ -40,19 +43,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'update_password':
                 updatePassword($_POST['user_id'], $_POST['new_password']);
                 break;
+            case 'change_role':
+                if ($is_super_admin) {
+                    changeUserRole($_POST['user_id'], $_POST['new_role']);
+                }
+                break;
         }
+    }
+}
+
+// Función para cambiar rol de usuario (SOLO SUPER ADMIN)
+function changeUserRole($user_id, $new_role) {
+    global $db, $message, $_SESSION;
+    
+    $user_id = intval($user_id);
+    
+    // No permitir cambiar el propio rol
+    if ($user_id == $_SESSION['user_id']) {
+        $message = "❌ No puedes cambiar tu propio rol";
+        return;
+    }
+    
+    try {
+        $stmt = $db->prepare("UPDATE users SET role = ? WHERE id = ?");
+        $stmt->execute([$new_role, $user_id]);
+        $message = "✅ Rol de usuario actualizado";
+    } catch (PDOException $e) {
+        $message = "❌ Error al actualizar rol";
     }
 }
 
 // Función para crear usuario
 function createUser() {
-    global $db, $message;
+    global $db, $message, $is_super_admin;
     
     $username = trim($_POST['username']);
     $password = $_POST['password'];
     $email = trim($_POST['email']);
     $full_name = trim($_POST['full_name'] ?? '');
     $role = $_POST['role'] ?? 'user';
+    
+    // Solo el super admin puede crear otros admins
+    if ($role === 'admin' && !$is_super_admin) {
+        $role = 'user';
+        $message = "⚠️ Solo el Super Admin puede crear administradores. Usuario creado como usuario normal.";
+    }
     
     if (empty($username) || empty($password) || empty($email)) {
         $message = "Todos los campos obligatorios deben ser completados";
@@ -88,6 +123,16 @@ function deleteUser($user_id) {
     
     if ($user_id == $_SESSION['user_id']) {
         $message = "❌ No puedes eliminar tu propio usuario";
+        return;
+    }
+    
+    // Verificar si es el super admin
+    $stmt = $db->prepare("SELECT username FROM users WHERE id = ?");
+    $stmt->execute([$user_id]);
+    $username = $stmt->fetchColumn();
+    
+    if ($username === ADMIN_USERNAME) {
+        $message = "❌ No se puede eliminar al Super Admin";
         return;
     }
     
@@ -153,7 +198,6 @@ $query = "SELECT u.*,
           LEFT JOIN urls ON urls.user_id = u.id
           GROUP BY u.id
           ORDER BY u.created_at DESC";
-
 $stmt = $db->query($query);
 $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -163,7 +207,6 @@ $stats['total_users'] = $db->query("SELECT COUNT(*) FROM users")->fetchColumn();
 $stats['active_users'] = $db->query("SELECT COUNT(*) FROM users WHERE status = 'active'")->fetchColumn();
 $stats['admin_users'] = $db->query("SELECT COUNT(*) FROM users WHERE role = 'admin'")->fetchColumn();
 ?>
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -182,9 +225,22 @@ $stats['admin_users'] = $db->query("SELECT COUNT(*) FROM users WHERE role = 'adm
             color: white;
             padding: 20px;
             text-align: center;
+            position: relative;
         }
         .header h1 {
             margin: 0;
+        }
+        .super-admin-badge {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            color: #333;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
         }
         .container {
             max-width: 1200px;
@@ -344,6 +400,11 @@ $stats['admin_users'] = $db->query("SELECT COUNT(*) FROM users WHERE role = 'adm
             background: #17a2b8;
             color: white;
         }
+        .badge-gold {
+            background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+            color: #333;
+            font-weight: bold;
+        }
         .back-links {
             margin-bottom: 20px;
         }
@@ -402,6 +463,24 @@ $stats['admin_users'] = $db->query("SELECT COUNT(*) FROM users WHERE role = 'adm
         .menu-links .btn-salir {
             background: #dc3545;
         }
+        .role-select {
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 12px;
+            background: white;
+        }
+        .role-change-form {
+            display: inline-block;
+        }
+        .super-admin-info {
+            background: #fffbf0;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -422,6 +501,11 @@ $stats['admin_users'] = $db->query("SELECT COUNT(*) FROM users WHERE role = 'adm
     <div class="header">
         <h1>👥 Gestión de Usuarios</h1>
         <p>Administra los usuarios del sistema</p>
+        <?php if ($is_super_admin): ?>
+        <div class="super-admin-badge">
+            👑 Super Admin
+        </div>
+        <?php endif; ?>
     </div>
 
     <div class="container">
@@ -434,6 +518,12 @@ $stats['admin_users'] = $db->query("SELECT COUNT(*) FROM users WHERE role = 'adm
             <div class="message">
                 <?php echo $message; ?>
             </div>
+        <?php endif; ?>
+        
+        <?php if ($is_super_admin): ?>
+        <div class="super-admin-info">
+            <strong>👑 Privilegios de Super Admin:</strong> Puedes crear administradores y cambiar roles de usuarios.
+        </div>
         <?php endif; ?>
         
         <!-- Estadísticas -->
@@ -483,10 +573,12 @@ $stats['admin_users'] = $db->query("SELECT COUNT(*) FROM users WHERE role = 'adm
                         </div>
                         
                         <div class="form-group">
-                            <label>Rol</label>
+                            <label>Rol <?php echo !$is_super_admin ? '<small>(Solo usuarios normales)</small>' : ''; ?></label>
                             <select class="form-control" name="role">
                                 <option value="user">Usuario</option>
+                                <?php if ($is_super_admin): ?>
                                 <option value="admin">Administrador</option>
+                                <?php endif; ?>
                             </select>
                         </div>
                     </div>
@@ -522,6 +614,7 @@ $stats['admin_users'] = $db->query("SELECT COUNT(*) FROM users WHERE role = 'adm
                         </thead>
                         <tbody>
                             <?php foreach ($users as $user): ?>
+                            <?php $is_this_super_admin = ($user['username'] === ADMIN_USERNAME); ?>
                             <tr>
                                 <td><?php echo $user['id']; ?></td>
                                 <td>
@@ -529,13 +622,28 @@ $stats['admin_users'] = $db->query("SELECT COUNT(*) FROM users WHERE role = 'adm
                                     <?php if ($user['id'] == $_SESSION['user_id']): ?>
                                         <span class="badge badge-info">Tú</span>
                                     <?php endif; ?>
+                                    <?php if ($is_this_super_admin): ?>
+                                        <span class="badge badge-gold">👑</span>
+                                    <?php endif; ?>
                                 </td>
                                 <td><?php echo htmlspecialchars($user['email']); ?></td>
                                 <td><?php echo htmlspecialchars($user['full_name'] ?? '-'); ?></td>
                                 <td>
-                                    <span class="badge badge-<?php echo $user['role'] === 'admin' ? 'danger' : 'info'; ?>">
-                                        <?php echo ucfirst($user['role']); ?>
-                                    </span>
+                                    <?php if ($is_super_admin && !$is_this_super_admin && $user['id'] != $_SESSION['user_id']): ?>
+                                        <!-- Solo el super admin puede cambiar roles -->
+                                        <form method="POST" class="role-change-form">
+                                            <input type="hidden" name="action" value="change_role">
+                                            <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
+                                            <select name="new_role" class="role-select" onchange="this.form.submit()">
+                                                <option value="user" <?php echo $user['role'] === 'user' ? 'selected' : ''; ?>>Usuario</option>
+                                                <option value="admin" <?php echo $user['role'] === 'admin' ? 'selected' : ''; ?>>Admin</option>
+                                            </select>
+                                        </form>
+                                    <?php else: ?>
+                                        <span class="badge badge-<?php echo $user['role'] === 'admin' ? 'danger' : 'info'; ?>">
+                                            <?php echo ucfirst($user['role']); ?>
+                                        </span>
+                                    <?php endif; ?>
                                 </td>
                                 <td>
                                     <?php 
@@ -582,7 +690,7 @@ $stats['admin_users'] = $db->query("SELECT COUNT(*) FROM users WHERE role = 'adm
                                     </button>
                                     
                                     <!-- Eliminar -->
-                                    <?php if ($user['id'] != $_SESSION['user_id']): ?>
+                                    <?php if ($user['id'] != $_SESSION['user_id'] && !$is_this_super_admin): ?>
                                     <form method="POST" style="display: inline;" 
                                           onsubmit="return confirm('¿Eliminar usuario <?php echo htmlspecialchars($user['username']); ?>?');">
                                         <input type="hidden" name="action" value="delete">
