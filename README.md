@@ -1,6 +1,6 @@
 # 🔗 URL Shortener - Acortador de URLs
 
-Un sistema completo de acortamiento de URLs con gestión multiusuario, estadísticas detalladas y geolocalización de clicks.
+Un sistema completo de acortamiento de URLs con gestión multiusuario, estadísticas detalladas, geolocalización de clicks y generación de códigos QR.
 
 ## ✨ Características
 
@@ -8,6 +8,9 @@ Un sistema completo de acortamiento de URLs con gestión multiusuario, estadíst
 - 📊 **Panel de administración** completo
 - 📈 **Estadísticas detalladas** por URL
 - 🗺️ **Geolocalización** de clicks con vista por ciudades
+- 📱 **Códigos QR** automáticos para cada URL
+- 🎨 **QR personalizables** con diferentes tamaños
+- 💾 **Descarga de QR** en PNG
 - 📱 **Diseño responsive** 
 - 🎨 **Interfaz moderna** y amigable
 - 🚀 **URLs cortas personalizables**
@@ -128,6 +131,11 @@ RewriteBase /
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^([a-zA-Z0-9]+)/?$ index.php?c=$1 [L,QSA]
+
+<Files "conf.php">
+    Order deny,allow
+    Deny from all
+</Files>
 Para instalación en subdirectorio:
 apacheRewriteBase /nombre-subdirectorio/
 6. Permisos de archivos
@@ -151,13 +159,19 @@ Para habilitar la geolocalización de clicks, puedes usar un servicio como ipapi
 El sistema intentará obtener la ubicación automáticamente
 No requiere API key para uso básico
 
-3. Configurar HTTPS (recomendado)
+3. Códigos QR
+
+Los códigos QR se generan automáticamente usando la API gratuita de qr-server.com
+No requiere configuración adicional
+Soporta diferentes tamaños: pequeño (150x150), mediano (200x200), grande (300x300), muy grande (500x500)
+
+4. Configurar HTTPS (recomendado)
 apache# Redirigir todo a HTTPS
 RewriteCond %{HTTPS} off
 RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
 📁 Estructura de Archivos
 url-shortener/
-├── index.php              # Página principal
+├── index.php              # Página principal con generador de QR
 ├── conf.php              # Configuración
 ├── stats.php             # Estadísticas públicas
 ├── menu.php              # Menú de navegación
@@ -176,7 +190,16 @@ Para usuarios:
 Regístrate o inicia sesión
 Pega tu URL larga en el formulario
 Obtén tu URL corta
+NUEVO: Genera un código QR instantáneamente
+Descarga el QR en diferentes tamaños
 ¡Compártela!
+
+Códigos QR:
+
+Click en el botón "QR" después de acortar una URL
+Selecciona el tamaño deseado
+Descarga el código QR en formato PNG
+El QR contiene la URL corta lista para escanear
 
 Para administradores:
 
@@ -184,12 +207,23 @@ Accede al panel en /admin/
 Gestiona usuarios desde "Gestión Usuarios"
 Visualiza estadísticas globales
 Explora ubicaciones en el mapa
+Ve códigos QR de cualquier URL
+
+🎨 Características de los Códigos QR
+
+Generación instantánea: Sin demoras ni procesamiento del servidor
+Múltiples tamaños: Desde 150x150 hasta 500x500 píxeles
+Descarga directa: Un click para descargar en PNG
+API gratuita: Sin límites de uso
+Compatible: Funciona con cualquier lector de QR
+Responsive: Se adapta a dispositivos móviles
 
 🛡️ Seguridad
 
 Contraseñas hasheadas con password_hash()
 Protección contra SQL injection con PDO
 Validación de URLs antes de acortar
+Verificación de URLs existentes
 Archivos sensibles protegidos con .htaccess
 Sesiones seguras para autenticación
 
@@ -210,6 +244,9 @@ Creado con ❤️ y PHP
 Interfaz con Bootstrap
 Iconos de Bootstrap Icons
 Mapas con Google Maps
+Códigos QR con qr-server.com API
+Desarrollado con mucha paciencia y alegría 🎉
 
 
 ¿Necesitas ayuda? Abre un issue en GitHub o contacta al administrador.
+Versión: 2.0 (con códigos QR)
