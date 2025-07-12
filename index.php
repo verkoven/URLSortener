@@ -1,7 +1,6 @@
 <?php
 session_start();
 require_once 'conf.php';
-
 // MANEJAR REDIRECCIONES DE URLs CORTAS
 if (isset($_GET['c']) && !empty($_GET['c'])) {
     $shortCode = $_GET['c'];
@@ -41,10 +40,8 @@ if (isset($_GET['c']) && !empty($_GET['c'])) {
     }
 }
 // FIN DE MANEJO DE REDIRECCIONES
-
 // Verificar si el usuario está logueado
 $user_logged_in = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
-
 // Conectar a la base de datos
 try {
     $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
@@ -52,13 +49,11 @@ try {
 } catch(PDOException $e) {
     die("Error de conexión: " . $e->getMessage());
 }
-
 $message = '';
 $messageType = '';
 $shortUrl = '';
 $shortCode = '';
 $showLoginModal = false;
-
 // Procesar el formulario de acortamiento
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['url'])) {
     // Verificar si está logueado
@@ -100,7 +95,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['url'])) {
                     } else {
                         // Generar nuevo código único
                         do {
-                            $shortCode = generateShortCode();
+                            $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                            $shortCode = '';
+                            for ($i = 0; $i < 6; $i++) {
+                                $shortCode .= $characters[rand(0, strlen($characters) - 1)];
+                            }
                             $stmt = $pdo->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
                             $stmt->execute([$shortCode]);
                             $exists = $stmt->fetchColumn();
@@ -128,7 +127,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['url'])) {
         }
     }
 }
-
 // Procesar login desde el modal
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login_submit'])) {
     $username = $_POST['username'] ?? '';
@@ -192,11 +190,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login_submit'])) {
         $showLoginModal = true;
     }
 }
-
 // Obtener estadísticas generales
 $totalUrls = $pdo->query("SELECT COUNT(*) FROM urls")->fetchColumn();
 $totalClicks = $pdo->query("SELECT SUM(clicks) FROM urls")->fetchColumn() ?: 0;
-
 // Si el usuario está logueado, obtener sus estadísticas
 $userUrls = 0;
 $userClicks = 0;
@@ -303,6 +299,34 @@ if ($user_logged_in) {
             position: relative;
             color: #6c757d;
         }
+        /* Estilos para el contenedor QR */
+        #qr-container {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 2px dashed #dee2e6;
+        }
+        #qr-container h6 {
+            color: #495057;
+            margin-bottom: 15px;
+        }
+        #qr-image {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .qr-options {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
     </style>
 </head>
 <body>
@@ -378,6 +402,26 @@ if ($user_logged_in) {
                                     <a href="<?php echo BASE_URL; ?>stats.php?code=<?php echo $shortCode; ?>" class="btn btn-warning">
                                         <i class="bi bi-graph-up"></i> Stats
                                     </a>
+                                    <button class="btn btn-secondary" onclick="toggleQR()">
+                                        <i class="bi bi-qr-code"></i> QR
+                                    </button>
+                                </div>
+                                
+                                <!-- Contenedor del QR -->
+                                <div id="qr-container">
+                                    <h6>📱 Código QR para tu URL</h6>
+                                    <img id="qr-image" src="" alt="Código QR">
+                                    <div class="qr-options">
+                                        <select id="qr-size" class="form-select form-select-sm" style="width: auto;" onchange="updateQR()">
+                                            <option value="150x150">Pequeño</option>
+                                            <option value="200x200" selected>Mediano</option>
+                                            <option value="300x300">Grande</option>
+                                            <option value="500x500">Muy Grande</option>
+                                        </select>
+                                        <a id="qr-download" href="" download="qr-code.png" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-download"></i> Descargar
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                         <?php endif; ?>
@@ -594,6 +638,42 @@ if ($user_logged_in) {
                 btn.classList.remove('btn-secondary');
                 btn.classList.add('btn-success');
             }, 2000);
+        }
+        
+        // Funciones para QR
+        function toggleQR() {
+            const qrContainer = document.getElementById('qr-container');
+            if (qrContainer.style.display === 'none' || qrContainer.style.display === '') {
+                showQR();
+            } else {
+                qrContainer.style.display = 'none';
+            }
+        }
+        
+        function showQR() {
+            const qrContainer = document.getElementById('qr-container');
+            const shortUrl = '<?php echo $shortUrl ?? ''; ?>';
+            
+            if (shortUrl) {
+                updateQR();
+                qrContainer.style.display = 'block';
+            }
+        }
+        
+        function updateQR() {
+            const qrImage = document.getElementById('qr-image');
+            const qrDownload = document.getElementById('qr-download');
+            const qrSize = document.getElementById('qr-size').value;
+            const shortUrl = '<?php echo $shortUrl ?? ''; ?>';
+            
+            // Generar QR usando API de qr-server.com (gratis)
+            const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=' + qrSize + 
+                          '&data=' + encodeURIComponent(shortUrl) + 
+                          '&margin=10';
+            
+            qrImage.src = qrUrl;
+            qrDownload.href = qrUrl;
+            qrDownload.download = 'qr-<?php echo $shortCode ?? 'code'; ?>.png';
         }
     </script>
 </body>
