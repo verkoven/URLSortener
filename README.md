@@ -212,6 +212,6 @@ Desarrollado con ❤️ usando PHP, MySQL y JavaScript.
 
 **Nota**: Recuerda cambiar las credenciales por defecto del admin y la configuración de la base de datos antes de usar en producción.
           Y recuerda también en el directorio principal poner el nombre del directorio en el que lo vas a instalar:
-          // Aquí poner RewriteBase 'directorio de instalación' del fichero .htaccess del directorio principal.
+          // Aquí poner RewriteBase 'directorio de instalación' del fichero .htaccess en el directorio principal.
 
 ```
