@@ -1,198 +1,228 @@
 <?php
-/**
- * Archivo de configuración de URL Shortener
- * Renombrar este archivo a conf.php y editar los valores
- */
+// conf_simple.php - Configuración simplificada que funciona
+// MODIFICA ESTOS VALORES SEGÚN TU SERVIDOR:
 
-// ============================
-// CONFIGURACIÓN DE BASE DE DATOS
-// ============================
-define('DB_HOST', 'localhost');           // Host de MySQL
-define('DB_NAME', 'url_shortener');       // Nombre de la base de datos
-define('DB_USER', 'tu_usuario_mysql');    // Usuario de MySQL
-define('DB_PASS', 'tu_contraseña_mysql'); // Contraseña de MySQL
+define('DB_HOST', '');        // Tu servidor MySQL
+define('DB_NAME', 'url_shortener');    // Nombre de tu base de datos
+define('DB_USER', '');             // Tu usuario MySQL
+define('DB_PASS', '');                 // Tu contraseña MySQL (vacía por defecto)
 
-// ============================
-// CONFIGURACIÓN DEL SITIO
-// ============================
-// URL base del sitio (IMPORTANTE: debe terminar con /)
-define('BASE_URL', 'https://tu-dominio.com/');
+// URL base de tu acortador (IMPORTANTE: cambiar por tu URL real)
+define('BASE_URL', 'http://0ln.eu/');
 
-// Nombre del sitio
-define('SITE_NAME', 'URL Shortener');
+// Credenciales de admin
+define('ADMIN_USERNAME', '');
+define('ADMIN_PASSWORD', '');
 
-// Email de contacto
-define('ADMIN_EMAIL', 'admin@tu-dominio.com');
 
-// ============================
-// CONFIGURACIÓN DE SEGURIDAD
-// ============================
-// Salt para encriptación (cambiar por una cadena aleatoria larga)
-define('SECURITY_SALT', 'pon-aqui-una-cadena-aleatoria-muy-larga-' . md5(time()));
-
-// Tiempo de sesión en segundos (por defecto 2 horas)
-define('SESSION_LIFETIME', 7200);
-
-// ============================
-// CONFIGURACIÓN DE URLs
-// ============================
-// Longitud por defecto de los códigos cortos
-define('DEFAULT_CODE_LENGTH', 6);
-
-// Caracteres permitidos en códigos personalizados
-define('ALLOWED_CHARS', 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_');
-
-// Número máximo de URLs por usuario (0 = ilimitado)
-define('MAX_URLS_PER_USER', 0);
-
-// ============================
-// CONFIGURACIÓN DE ESTADÍSTICAS
-// ============================
-// Habilitar geolocalización (requiere conexión a internet)
-define('ENABLE_GEO', true);
-
-// API para geolocalización (gratuita)
-define('GEO_API_URL', 'http://ip-api.com/json/');
-
-// Días para mantener estadísticas detalladas (0 = siempre)
-define('STATS_RETENTION_DAYS', 90);
-
-// ============================
-// CONFIGURACIÓN DE QR
-// ============================
-// Tamaño por defecto de códigos QR
-define('QR_SIZE', 300);
-
-// Nivel de corrección de errores (L, M, Q, H)
-define('QR_ERROR_CORRECTION', 'M');
-
-// ============================
-// CONFIGURACIÓN DE LÍMITES
-// ============================
-// Límite de creación de URLs por hora por IP
-define('RATE_LIMIT_HOUR', 100);
-
-// Tamaño máximo de URL original (caracteres)
-define('MAX_URL_LENGTH', 2000);
-
-// ============================
-// CONFIGURACIÓN DE DEBUG
-// ============================
-// Modo debug (desactivar en producción)
-define('DEBUG_MODE', false);
-
-// Mostrar errores (desactivar en producción)
-if (DEBUG_MODE) {
-    error_reporting(E_ALL);
-    ini_set('display_errors', 1);
-} else {
-    error_reporting(0);
-    ini_set('display_errors', 0);
-}
-
-// ============================
-// ZONA HORARIA
-// ============================
-// Configurar zona horaria
-date_default_timezone_set('Europe/Madrid'); // Cambiar según tu zona
-
-// ============================
-// FUNCIONES AUXILIARES
-// ============================
+// Configuración adicional
+define('SHORT_URL_LENGTH', 6);
+define('SESSION_LIFETIME', 3600); // 1 hora
 
 /**
- * Genera un código corto aleatorio
- * @param int $length Longitud del código
- * @return string Código generado
+ * Clase Database simplificada
  */
-function generateShortCode($length = null) {
-    if ($length === null) {
-        $length = DEFAULT_CODE_LENGTH;
+class Database {
+    private static $instance = null;
+    private $pdo;
+    
+    private function __construct() {
+        try {
+            // Intentar conectar primero sin especificar base de datos
+            $pdo_temp = new PDO("mysql:host=" . DB_HOST, DB_USER, DB_PASS);
+            $pdo_temp->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            
+            // Crear base de datos si no existe
+            $pdo_temp->exec("CREATE DATABASE IF NOT EXISTS `" . DB_NAME . "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+            
+            // Conectar a la base de datos específica
+            $this->pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
+            $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+            $this->pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+            
+            // Crear tablas si no existen
+            $this->createTablesIfNeeded();
+            
+        } catch (PDOException $e) {
+            // Log del error para debugging
+            error_log("Error de conexión BD: " . $e->getMessage());
+            die("Error de conexión a la base de datos. Verifica tu configuración en conf_simple.php");
+        }
     }
     
-    $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    $charactersLength = strlen($characters);
-    $randomString = '';
+    public static function getInstance() {
+        if (self::$instance === null) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
     
+    public function getConnection() {
+        return $this->pdo;
+    }
+    
+    /**
+     * Crear tablas básicas si no existen
+     */
+    private function createTablesIfNeeded() {
+        // Tabla URLs
+        $sql_urls = "
+        CREATE TABLE IF NOT EXISTS urls (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            short_code VARCHAR(10) UNIQUE NOT NULL,
+            original_url TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            clicks INT DEFAULT 0,
+            last_click TIMESTAMP NULL,
+            ip_address VARCHAR(45) NULL,
+            user_agent TEXT NULL,
+            active TINYINT(1) DEFAULT 1,
+            INDEX idx_short_code (short_code),
+            INDEX idx_created_at (created_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ";
+        
+        // Tabla estadísticas de clicks
+        $sql_stats = "
+        CREATE TABLE IF NOT EXISTS click_stats (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            url_id INT,
+            clicked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            ip_address VARCHAR(45) NULL,
+            user_agent TEXT NULL,
+            referer TEXT NULL,
+            INDEX idx_url_id (url_id),
+            INDEX idx_clicked_at (clicked_at),
+            FOREIGN KEY (url_id) REFERENCES urls(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ";
+        
+        // Tabla sesiones admin
+        $sql_sessions = "
+        CREATE TABLE IF NOT EXISTS admin_sessions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            session_id VARCHAR(128) UNIQUE NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            expires_at TIMESTAMP NOT NULL,
+            ip_address VARCHAR(45) NULL,
+            INDEX idx_session_id (session_id),
+            INDEX idx_expires_at (expires_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        ";
+        
+        try {
+            $this->pdo->exec($sql_urls);
+            $this->pdo->exec($sql_stats);
+            $this->pdo->exec($sql_sessions);
+            
+            // Insertar URL de prueba si la tabla está vacía
+            $count = $this->pdo->query("SELECT COUNT(*) FROM urls")->fetchColumn();
+            if ($count == 0) {
+                $stmt = $this->pdo->prepare("INSERT INTO urls (short_code, original_url, ip_address) VALUES (?, ?, ?)");
+                $stmt->execute(['test123', 'https://www.google.com', '127.0.0.1']);
+            }
+            
+        } catch (PDOException $e) {
+            error_log("Error creando tablas: " . $e->getMessage());
+            // No fallar silenciosamente, seguir funcionando
+        }
+    }
+    
+    /**
+     * Método para limpiar sesiones expiradas
+     */
+    public function cleanExpiredSessions() {
+        try {
+            $this->pdo->exec("DELETE FROM admin_sessions WHERE expires_at < NOW()");
+        } catch (PDOException $e) {
+            error_log("Error limpiando sesiones: " . $e->getMessage());
+        }
+    }
+}
+
+/**
+ * Funciones auxiliares
+ */
+function generateShortCode($length = SHORT_URL_LENGTH) {
+    $characters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    $code = '';
     for ($i = 0; $i < $length; $i++) {
-        $randomString .= $characters[rand(0, $charactersLength - 1)];
+        $code .= $characters[rand(0, strlen($characters) - 1)];
+    }
+    return $code;
+}
+
+function validateUrl($url) {
+    return filter_var($url, FILTER_VALIDATE_URL) !== false;
+}
+
+function getClientIP() {
+    // Obtener IP real del cliente
+    $ipKeys = ['HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'HTTP_CLIENT_IP', 'REMOTE_ADDR'];
+    
+    foreach ($ipKeys as $key) {
+        if (!empty($_SERVER[$key])) {
+            $ips = explode(',', $_SERVER[$key]);
+            $ip = trim($ips[0]);
+            
+            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                return $ip;
+            }
+        }
     }
     
-    return $randomString;
+    return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+}
+
+function sanitizeInput($data) {
+    return htmlspecialchars(strip_tags(trim($data)), ENT_QUOTES, 'UTF-8');
 }
 
 /**
- * Valida un código personalizado
- * @param string $code Código a validar
- * @return bool True si es válido
+ * Función para logging de errores
  */
-function isValidCustomCode($code) {
-    // Longitud mínima y máxima
-    if (strlen($code) < 3 || strlen($code) > 20) {
-        return false;
+function logError($message, $context = []) {
+    $log = date('Y-m-d H:i:s') . " - " . $message;
+    if (!empty($context)) {
+        $log .= " - Context: " . json_encode($context);
     }
-    
-    // Solo caracteres permitidos
-    if (!preg_match('/^[a-zA-Z0-9_-]+$/', $code)) {
-        return false;
-    }
-    
-    // No permitir códigos reservados
-    $reserved = ['admin', 'api', 'stats', 'qr', 'login', 'logout', 'assets'];
-    if (in_array(strtolower($code), $reserved)) {
-        return false;
-    }
-    
-    return true;
+    error_log($log);
 }
 
 /**
- * Obtener IP real del visitante
- * @return string IP address
+ * Verificar si la configuración es válida
  */
-function getRealIpAddress() {
-    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
-        $ip = $_SERVER['HTTP_CLIENT_IP'];
-    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-        $ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
-    } else {
-        $ip = $_SERVER['REMOTE_ADDR'];
+function checkConfiguration() {
+    $errors = [];
+    
+    if (DB_HOST === 'localhost' && DB_USER === 'root' && DB_PASS === '') {
+        // Configuración típica de desarrollo, probablemente está bien
     }
     
-    // Validar IP
-    if (filter_var($ip, FILTER_VALIDATE_IP)) {
-        return $ip;
+    if (strpos(BASE_URL, 'localhost') !== false || strpos(BASE_URL, '127.0.0.1') !== false) {
+        // URL de desarrollo, está bien
+    } elseif (!filter_var(BASE_URL, FILTER_VALIDATE_URL)) {
+        $errors[] = 'BASE_URL no es una URL válida';
     }
     
-    return '0.0.0.0';
+    return $errors;
 }
 
-/**
- * Limpiar entrada de usuario
- * @param string $data Datos a limpiar
- * @return string Datos limpios
- */
-function cleanInput($data) {
-    $data = trim($data);
-    $data = stripslashes($data);
-    $data = htmlspecialchars($data);
-    return $data;
+// Verificar configuración al cargar
+$config_errors = checkConfiguration();
+if (!empty($config_errors)) {
+    foreach ($config_errors as $error) {
+        error_log("Error de configuración: " . $error);
+    }
 }
 
-// ============================
-// VERIFICACIÓN DE INSTALACIÓN
-// ============================
-// No modificar esta sección
-if (!defined('DB_HOST') || !defined('DB_NAME') || !defined('DB_USER') || !defined('DB_PASS')) {
-    die('Error: Configuración de base de datos incompleta. Por favor, edita conf.php');
-}
-
-if (!defined('BASE_URL') || BASE_URL === 'https://tu-dominio.com/') {
-    die('Error: Por favor configura BASE_URL en conf.php con tu dominio real');
-}
-
-// Inicializar sesión si no está iniciada
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
+// Intentar inicializar la base de datos automáticamente
+try {
+    $db_instance = Database::getInstance();
+    // Si llegamos aquí, la conexión fue exitosa
+    define('DB_CONNECTION_OK', true);
+} catch (Exception $e) {
+    define('DB_CONNECTION_OK', false);
+    logError("Error inicializando base de datos", ['error' => $e->getMessage()]);
 }
 ?>
