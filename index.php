@@ -2,6 +2,21 @@
 session_start();
 require_once 'conf.php';
 
+// CONFIGURACIÓN DE SEGURIDAD - Cambia esto según necesites
+define('REQUIRE_LOGIN_TO_SHORTEN', true); // true = requiere login, false = público
+define('ALLOW_ANONYMOUS_VIEW', true);      // true = permite ver la página sin login
+
+// Verificar si el usuario está logueado
+$is_logged_in = isset($_SESSION['user_id']) || isset($_SESSION['admin_logged_in']);
+$user_id = $_SESSION['user_id'] ?? 1;
+$username = $_SESSION['username'] ?? 'Invitado';
+
+// Si se requiere login y no está logueado, redirigir
+if (REQUIRE_LOGIN_TO_SHORTEN && !$is_logged_in && !ALLOW_ANONYMOUS_VIEW) {
+    header('Location: admin/login.php');
+    exit;
+}
+
 // Conexión a la base de datos
 try {
     $db = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
@@ -14,62 +29,65 @@ $message = '';
 $messageType = 'info';
 $shortened_url = '';
 
-// Procesar el formulario
+// Procesar el formulario solo si está logueado o no se requiere login
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['url'])) {
-    $original_url = trim($_POST['url']);
-    $custom_code = isset($_POST['custom_code']) ? trim($_POST['custom_code']) : '';
-    $domain_id = isset($_POST['domain_id']) ? (int)$_POST['domain_id'] : null;
-    
-    // Validar URL
-    if (!filter_var($original_url, FILTER_VALIDATE_URL)) {
-        $message = '❌ Por favor, introduce una URL válida';
+    // Verificar nuevamente el login si es requerido
+    if (REQUIRE_LOGIN_TO_SHORTEN && !$is_logged_in) {
+        $message = '❌ Debes iniciar sesión para acortar URLs';
         $messageType = 'danger';
     } else {
-        // Generar código si no se proporcionó uno personalizado
-        if (empty($custom_code)) {
-            do {
-                $custom_code = generateShortCode();
+        $original_url = trim($_POST['url']);
+        $custom_code = isset($_POST['custom_code']) ? trim($_POST['custom_code']) : '';
+        $domain_id = isset($_POST['domain_id']) ? (int)$_POST['domain_id'] : null;
+        
+        // Validar URL
+        if (!filter_var($original_url, FILTER_VALIDATE_URL)) {
+            $message = '❌ Por favor, introduce una URL válida';
+            $messageType = 'danger';
+        } else {
+            // Generar código si no se proporcionó uno personalizado
+            if (empty($custom_code)) {
+                do {
+                    $custom_code = generateShortCode();
+                    $stmt = $db->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
+                    $stmt->execute([$custom_code]);
+                } while ($stmt->fetchColumn() > 0);
+            } else {
+                // Verificar que el código personalizado no existe
                 $stmt = $db->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
                 $stmt->execute([$custom_code]);
-            } while ($stmt->fetchColumn() > 0);
-        } else {
-            // Verificar que el código personalizado no existe
-            $stmt = $db->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
-            $stmt->execute([$custom_code]);
-            if ($stmt->fetchColumn() > 0) {
-                $message = '❌ Ese código ya está en uso. Por favor, elige otro.';
-                $messageType = 'danger';
-                $custom_code = '';
-            }
-        }
-        
-        if (!empty($custom_code)) {
-            try {
-                // Determinar el user_id (1 para anónimos)
-                $user_id = isset($_SESSION['user_id']) ? $_SESSION['user_id'] : 1;
-                
-                // Insertar la URL
-                $stmt = $db->prepare("
-                    INSERT INTO urls (short_code, original_url, user_id, domain_id, created_at) 
-                    VALUES (?, ?, ?, ?, NOW())
-                ");
-                $stmt->execute([$custom_code, $original_url, $user_id, $domain_id]);
-                
-                // Obtener dominio si se seleccionó uno personalizado
-                if ($domain_id) {
-                    $stmt = $db->prepare("SELECT domain FROM custom_domains WHERE id = ?");
-                    $stmt->execute([$domain_id]);
-                    $custom_domain = $stmt->fetch()['domain'];
-                    $shortened_url = "https://" . $custom_domain . "/" . $custom_code;
-                } else {
-                    $shortened_url = rtrim(BASE_URL, '/') . '/' . $custom_code;
+                if ($stmt->fetchColumn() > 0) {
+                    $message = '❌ Ese código ya está en uso. Por favor, elige otro.';
+                    $messageType = 'danger';
+                    $custom_code = '';
                 }
-                
-                $message = '✅ ¡URL acortada con éxito!';
-                $messageType = 'success';
-            } catch (PDOException $e) {
-                $message = '❌ Error al crear la URL corta: ' . $e->getMessage();
-                $messageType = 'danger';
+            }
+            
+            if (!empty($custom_code)) {
+                try {
+                    // Insertar la URL con el user_id correcto
+                    $stmt = $db->prepare("
+                        INSERT INTO urls (short_code, original_url, user_id, domain_id, created_at) 
+                        VALUES (?, ?, ?, ?, NOW())
+                    ");
+                    $stmt->execute([$custom_code, $original_url, $user_id, $domain_id]);
+                    
+                    // Obtener dominio si se seleccionó uno personalizado
+                    if ($domain_id) {
+                        $stmt = $db->prepare("SELECT domain FROM custom_domains WHERE id = ?");
+                        $stmt->execute([$domain_id]);
+                        $custom_domain = $stmt->fetch()['domain'];
+                        $shortened_url = "https://" . $custom_domain . "/" . $custom_code;
+                    } else {
+                        $shortened_url = rtrim(BASE_URL, '/') . '/' . $custom_code;
+                    }
+                    
+                    $message = '✅ ¡URL acortada con éxito!';
+                    $messageType = 'success';
+                } catch (PDOException $e) {
+                    $message = '❌ Error al crear la URL corta: ' . $e->getMessage();
+                    $messageType = 'danger';
+                }
             }
         }
     }
@@ -92,19 +110,48 @@ try {
     $stmt = $db->query("SELECT SUM(clicks) as total FROM urls");
     $total_clicks = $stmt->fetch()['total'] ?? 0;
     
-    // URLs recientes
-    $stmt = $db->query("
-        SELECT u.*, cd.domain as custom_domain 
-        FROM urls u 
-        LEFT JOIN custom_domains cd ON u.domain_id = cd.id 
-        ORDER BY u.created_at DESC 
-        LIMIT 5
-    ");
+    // URLs recientes (solo públicas si no está logueado)
+    if ($is_logged_in) {
+        $stmt = $db->query("
+            SELECT u.*, cd.domain as custom_domain 
+            FROM urls u 
+            LEFT JOIN custom_domains cd ON u.domain_id = cd.id 
+            ORDER BY u.created_at DESC 
+            LIMIT 5
+        ");
+    } else {
+        $stmt = $db->query("
+            SELECT u.*, cd.domain as custom_domain 
+            FROM urls u 
+            LEFT JOIN custom_domains cd ON u.domain_id = cd.id 
+            WHERE u.is_public = 1 
+            ORDER BY u.created_at DESC 
+            LIMIT 5
+        ");
+    }
     $recent_urls = $stmt->fetchAll();
 } catch (Exception $e) {
     $total_urls = 0;
     $total_clicks = 0;
     $recent_urls = [];
+}
+
+// Si el usuario está logueado, obtener sus estadísticas
+$user_stats = null;
+if ($is_logged_in && $user_id > 1) {
+    try {
+        $stmt = $db->prepare("
+            SELECT 
+                COUNT(*) as total_urls,
+                SUM(clicks) as total_clicks
+            FROM urls 
+            WHERE user_id = ?
+        ");
+        $stmt->execute([$user_id]);
+        $user_stats = $stmt->fetch();
+    } catch (Exception $e) {
+        // Ignorar errores
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -190,6 +237,30 @@ try {
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
         
+        .user-info {
+            color: white;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .user-info span {
+            opacity: 0.9;
+        }
+        
+        .btn-logout {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            transition: all 0.3s;
+        }
+        
+        .btn-logout:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        
         /* Container principal */
         .container {
             max-width: 1200px;
@@ -241,6 +312,67 @@ try {
             }
         }
         
+        /* Login Required Message */
+        .login-required {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .login-required h3 {
+            margin-bottom: 10px;
+        }
+        
+        .login-required a {
+            color: #667eea;
+            font-weight: bold;
+            text-decoration: none;
+        }
+        
+        .login-required a:hover {
+            text-decoration: underline;
+        }
+        
+        /* User Stats */
+        .user-stats {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 2px solid #e9ecef;
+        }
+        
+        .user-stats h3 {
+            color: #495057;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        
+        .user-stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .user-stat-item {
+            text-align: center;
+        }
+        
+        .user-stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .user-stat-label {
+            color: #6c757d;
+            font-size: 0.9em;
+        }
+        
         /* Formulario */
         .url-form {
             margin-bottom: 30px;
@@ -280,6 +412,11 @@ try {
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
         
+        .form-control:disabled {
+            background: #f8f9fa;
+            cursor: not-allowed;
+        }
+        
         .form-select {
             padding: 15px 20px;
             border: 2px solid #e9ecef;
@@ -308,13 +445,18 @@ try {
             white-space: nowrap;
         }
         
-        .btn-shorten:hover {
+        .btn-shorten:hover:not(:disabled) {
             transform: translateY(-2px);
             box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
         }
         
-        .btn-shorten:active {
+        .btn-shorten:active:not(:disabled) {
             transform: translateY(0);
+        }
+        
+        .btn-shorten:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
         }
         
         /* Advanced Options */
@@ -583,6 +725,12 @@ try {
             border: 1px solid #f5c6cb;
         }
         
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
         /* Features */
         .features {
             display: grid;
@@ -677,6 +825,12 @@ try {
             .recent-section {
                 padding: 20px;
             }
+            
+            .user-info {
+                flex-direction: column;
+                gap: 10px;
+                text-align: center;
+            }
         }
         
         /* Loading animation */
@@ -711,7 +865,15 @@ try {
             <nav class="nav-links">
                 <a href="#features">Características</a>
                 <a href="#stats">Estadísticas</a>
-                <a href="/admin/login.php" class="btn-login">Panel Admin</a>
+                <?php if ($is_logged_in): ?>
+                <div class="user-info">
+                    <span>👤 <?php echo htmlspecialchars($username); ?></span>
+                    <a href="/admin/panel_simple.php" class="btn-login">Panel Admin</a>
+                    <a href="/admin/logout.php" class="btn-logout">Cerrar Sesión</a>
+                </div>
+                <?php else: ?>
+                <a href="/admin/login.php" class="btn-login">Iniciar Sesión</a>
+                <?php endif; ?>
             </nav>
         </div>
     </header>
@@ -721,7 +883,13 @@ try {
         <!-- Hero Section -->
         <div class="hero">
             <h1>Acorta tus URLs en segundos</h1>
-            <p>Convierte enlaces largos en URLs cortas y fáciles de compartir. Gratis, rápido y con estadísticas en tiempo real.</p>
+            <p>Convierte enlaces largos en URLs cortas y fáciles de compartir. 
+            <?php if (REQUIRE_LOGIN_TO_SHORTEN): ?>
+                Servicio exclusivo para usuarios registrados.
+            <?php else: ?>
+                Gratis, rápido y con estadísticas en tiempo real.
+            <?php endif; ?>
+            </p>
         </div>
         
         <!-- Stats Grid -->
@@ -751,6 +919,30 @@ try {
             </div>
             <?php endif; ?>
             
+            <?php if ($is_logged_in && $user_stats): ?>
+            <div class="user-stats">
+                <h3>👤 Tus Estadísticas</h3>
+                <div class="user-stats-grid">
+                    <div class="user-stat-item">
+                        <div class="user-stat-value"><?php echo number_format($user_stats['total_urls'] ?? 0); ?></div>
+                        <div class="user-stat-label">URLs creadas</div>
+                    </div>
+                    <div class="user-stat-item">
+                        <div class="user-stat-value"><?php echo number_format($user_stats['total_clicks'] ?? 0); ?></div>
+                        <div class="user-stat-label">Clicks totales</div>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
+            
+            <?php if (REQUIRE_LOGIN_TO_SHORTEN && !$is_logged_in): ?>
+            <div class="login-required">
+                <h3>🔒 Inicio de sesión requerido</h3>
+                <p>Para crear URLs cortas necesitas iniciar sesión.</p>
+                <p><a href="/admin/login.php">Iniciar Sesión</a> o <a href="/admin/login.php?register=1">Registrarse</a></p>
+            </div>
+            <?php endif; ?>
+            
             <?php if (empty($shortened_url)): ?>
             <!-- URL Form -->
             <form method="POST" class="url-form">
@@ -762,13 +954,17 @@ try {
                                class="form-control" 
                                placeholder="https://ejemplo.com/pagina-muy-larga-que-quieres-acortar" 
                                required 
-                               autofocus>
-                        <button type="submit" class="btn-shorten">
+                               autofocus
+                               <?php echo (REQUIRE_LOGIN_TO_SHORTEN && !$is_logged_in) ? 'disabled' : ''; ?>>
+                        <button type="submit" 
+                                class="btn-shorten"
+                                <?php echo (REQUIRE_LOGIN_TO_SHORTEN && !$is_logged_in) ? 'disabled' : ''; ?>>
                             Acortar URL
                         </button>
                     </div>
                 </div>
                 
+                <?php if (!REQUIRE_LOGIN_TO_SHORTEN || $is_logged_in): ?>
                 <!-- Advanced Options -->
                 <div class="advanced-options">
                     <div class="advanced-toggle" onclick="toggleAdvanced()">
@@ -802,6 +998,7 @@ try {
                         <?php endif; ?>
                     </div>
                 </div>
+                <?php endif; ?>
             </form>
             <?php else: ?>
             <!-- Result Box -->
@@ -836,7 +1033,7 @@ try {
             <div class="feature">
                 <div class="feature-icon">⚡</div>
                 <h3>Rápido y Sencillo</h3>
-                <p>Acorta tus URLs en segundos. Sin registro necesario, sin complicaciones.</p>
+                <p><?php echo REQUIRE_LOGIN_TO_SHORTEN ? 'Acorta URLs de forma segura con tu cuenta.' : 'Acorta tus URLs en segundos. Sin complicaciones.'; ?></p>
             </div>
             <div class="feature">
                 <div class="feature-icon">📊</div>
@@ -856,7 +1053,7 @@ try {
             <div class="feature">
                 <div class="feature-icon">🔒</div>
                 <h3>Seguro y Confiable</h3>
-                <p>Enlaces permanentes con redirección HTTPS segura.</p>
+                <p><?php echo REQUIRE_LOGIN_TO_SHORTEN ? 'Acceso exclusivo para usuarios registrados.' : 'Enlaces permanentes con redirección HTTPS segura.'; ?></p>
             </div>
             <div class="feature">
                 <div class="feature-icon">🌐</div>
@@ -868,7 +1065,7 @@ try {
         <!-- Recent URLs -->
         <?php if (!empty($recent_urls)): ?>
         <div class="recent-section">
-            <h2>🔗 URLs Recientes</h2>
+            <h2>🔗 URLs Recientes <?php echo (!$is_logged_in ? '(Públicas)' : ''); ?></h2>
             <div class="recent-urls">
                 <table>
                     <thead>
