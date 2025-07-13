@@ -1,8 +1,90 @@
+# Activar rewrite
 RewriteEngine On
 
-# Solo redirigir si no es un archivo o directorio real
+# Forzar HTTPS (opcional - descomenta si tienes SSL)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
+# Permitir acceso a archivos y directorios existentes
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Excluir rutas específicas de administración y sistema
+RewriteRule ^(admin|assets|api|css|js|img|images|fonts|uploads|vendor|test|phpinfo)(/.*)?$ - [L]
+
+# Excluir archivos específicos que no deben ser redirigidos
+RewriteRule ^(index\.php|stats\.php|qr\.php|redirect\.php|404\.php)$ - [L]
+
+# Excluir extensiones de archivo comunes
+RewriteRule \.(jpg|jpeg|png|gif|ico|css|js|json|xml|txt|pdf|doc|docx|zip|rar)$ - [L]
+
+# Si no es un archivo, directorio o ruta excluida, asumir que es un código corto
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^([a-zA-Z0-9_-]+)/?$ redirect.php?code=$1 [L,QSA]
 
-# Redirigir todo a redirect.php
-RewriteRule ^(.*)$ redirect.php?code=$1 [L,QSA]
+# Seguridad: Denegar acceso a archivos sensibles
+<FilesMatch "\.(env|json|lock|gitignore|git|svn|htaccess|htpasswd|ini|log|sh|sql|bak|backup|dist)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Proteger conf.php específicamente
+<Files "conf.php">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Evitar listar directorios
+Options -Indexes
+
+# Configuración de seguridad adicional
+<IfModule mod_headers.c>
+    # Prevenir clickjacking
+    Header set X-Frame-Options "SAMEORIGIN"
+    
+    # Prevenir XSS
+    Header set X-XSS-Protection "1; mode=block"
+    
+    # Prevenir sniffing de MIME
+    Header set X-Content-Type-Options "nosniff"
+    
+    # Referrer Policy
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Compresión GZIP (mejora velocidad)
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>
+
+# Cache de archivos estáticos (mejora velocidad)
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType text/javascript "access plus 1 month"
+</IfModule>
+
+# UTF-8 encoding
+AddDefaultCharset UTF-8
+
+# Manejar errores personalizados
+ErrorDocument 404 /404.php
+ErrorDocument 403 /404.php
+ErrorDocument 500 "Error interno del servidor"
+
+# PHP - Configuración útil (si tu servidor lo permite)
+<IfModule mod_php7.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 10M
+    php_value max_execution_time 300
+    php_value max_input_time 300
+    php_flag display_errors off
+    php_flag log_errors on
+</IfModule>

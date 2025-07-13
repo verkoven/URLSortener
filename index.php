@@ -820,7 +820,7 @@ try {
                     <a href="stats.php?code=<?php echo urlencode($custom_code); ?>" class="btn-action btn-stats">
                         📊 Ver Estadísticas
                     </a>
-                    <a href="qr.php?code=<?php echo urlencode($custom_code); ?>" class="btn-action btn-qr">
+                    <a href="qr.php?code=<?php echo urlencode($custom_code); ?>&view=1" class="btn-action btn-qr">
                         📱 Generar QR
                     </a>
                     <a href="/" class="btn-action btn-stats">
