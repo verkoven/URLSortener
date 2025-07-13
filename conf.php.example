@@ -1,0 +1,198 @@
+<?php
+/**
+ * Archivo de configuración de URL Shortener
+ * Renombrar este archivo a conf.php y editar los valores
+ */
+
+// ============================
+// CONFIGURACIÓN DE BASE DE DATOS
+// ============================
+define('DB_HOST', 'localhost');           // Host de MySQL
+define('DB_NAME', 'url_shortener');       // Nombre de la base de datos
+define('DB_USER', 'tu_usuario_mysql');    // Usuario de MySQL
+define('DB_PASS', 'tu_contraseña_mysql'); // Contraseña de MySQL
+
+// ============================
+// CONFIGURACIÓN DEL SITIO
+// ============================
+// URL base del sitio (IMPORTANTE: debe terminar con /)
+define('BASE_URL', 'https://tu-dominio.com/');
+
+// Nombre del sitio
+define('SITE_NAME', 'URL Shortener');
+
+// Email de contacto
+define('ADMIN_EMAIL', 'admin@tu-dominio.com');
+
+// ============================
+// CONFIGURACIÓN DE SEGURIDAD
+// ============================
+// Salt para encriptación (cambiar por una cadena aleatoria larga)
+define('SECURITY_SALT', 'pon-aqui-una-cadena-aleatoria-muy-larga-' . md5(time()));
+
+// Tiempo de sesión en segundos (por defecto 2 horas)
+define('SESSION_LIFETIME', 7200);
+
+// ============================
+// CONFIGURACIÓN DE URLs
+// ============================
+// Longitud por defecto de los códigos cortos
+define('DEFAULT_CODE_LENGTH', 6);
+
+// Caracteres permitidos en códigos personalizados
+define('ALLOWED_CHARS', 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_');
+
+// Número máximo de URLs por usuario (0 = ilimitado)
+define('MAX_URLS_PER_USER', 0);
+
+// ============================
+// CONFIGURACIÓN DE ESTADÍSTICAS
+// ============================
+// Habilitar geolocalización (requiere conexión a internet)
+define('ENABLE_GEO', true);
+
+// API para geolocalización (gratuita)
+define('GEO_API_URL', 'http://ip-api.com/json/');
+
+// Días para mantener estadísticas detalladas (0 = siempre)
+define('STATS_RETENTION_DAYS', 90);
+
+// ============================
+// CONFIGURACIÓN DE QR
+// ============================
+// Tamaño por defecto de códigos QR
+define('QR_SIZE', 300);
+
+// Nivel de corrección de errores (L, M, Q, H)
+define('QR_ERROR_CORRECTION', 'M');
+
+// ============================
+// CONFIGURACIÓN DE LÍMITES
+// ============================
+// Límite de creación de URLs por hora por IP
+define('RATE_LIMIT_HOUR', 100);
+
+// Tamaño máximo de URL original (caracteres)
+define('MAX_URL_LENGTH', 2000);
+
+// ============================
+// CONFIGURACIÓN DE DEBUG
+// ============================
+// Modo debug (desactivar en producción)
+define('DEBUG_MODE', false);
+
+// Mostrar errores (desactivar en producción)
+if (DEBUG_MODE) {
+    error_reporting(E_ALL);
+    ini_set('display_errors', 1);
+} else {
+    error_reporting(0);
+    ini_set('display_errors', 0);
+}
+
+// ============================
+// ZONA HORARIA
+// ============================
+// Configurar zona horaria
+date_default_timezone_set('Europe/Madrid'); // Cambiar según tu zona
+
+// ============================
+// FUNCIONES AUXILIARES
+// ============================
+
+/**
+ * Genera un código corto aleatorio
+ * @param int $length Longitud del código
+ * @return string Código generado
+ */
+function generateShortCode($length = null) {
+    if ($length === null) {
+        $length = DEFAULT_CODE_LENGTH;
+    }
+    
+    $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    $charactersLength = strlen($characters);
+    $randomString = '';
+    
+    for ($i = 0; $i < $length; $i++) {
+        $randomString .= $characters[rand(0, $charactersLength - 1)];
+    }
+    
+    return $randomString;
+}
+
+/**
+ * Valida un código personalizado
+ * @param string $code Código a validar
+ * @return bool True si es válido
+ */
+function isValidCustomCode($code) {
+    // Longitud mínima y máxima
+    if (strlen($code) < 3 || strlen($code) > 20) {
+        return false;
+    }
+    
+    // Solo caracteres permitidos
+    if (!preg_match('/^[a-zA-Z0-9_-]+$/', $code)) {
+        return false;
+    }
+    
+    // No permitir códigos reservados
+    $reserved = ['admin', 'api', 'stats', 'qr', 'login', 'logout', 'assets'];
+    if (in_array(strtolower($code), $reserved)) {
+        return false;
+    }
+    
+    return true;
+}
+
+/**
+ * Obtener IP real del visitante
+ * @return string IP address
+ */
+function getRealIpAddress() {
+    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+        $ip = $_SERVER['HTTP_CLIENT_IP'];
+    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
+    } else {
+        $ip = $_SERVER['REMOTE_ADDR'];
+    }
+    
+    // Validar IP
+    if (filter_var($ip, FILTER_VALIDATE_IP)) {
+        return $ip;
+    }
+    
+    return '0.0.0.0';
+}
+
+/**
+ * Limpiar entrada de usuario
+ * @param string $data Datos a limpiar
+ * @return string Datos limpios
+ */
+function cleanInput($data) {
+    $data = trim($data);
+    $data = stripslashes($data);
+    $data = htmlspecialchars($data);
+    return $data;
+}
+
+// ============================
+// VERIFICACIÓN DE INSTALACIÓN
+// ============================
+// No modificar esta sección
+if (!defined('DB_HOST') || !defined('DB_NAME') || !defined('DB_USER') || !defined('DB_PASS')) {
+    die('Error: Configuración de base de datos incompleta. Por favor, edita conf.php');
+}
+
+if (!defined('BASE_URL') || BASE_URL === 'https://tu-dominio.com/') {
+    die('Error: Por favor configura BASE_URL en conf.php con tu dominio real');
+}
+
+// Inicializar sesión si no está iniciada
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+?>
