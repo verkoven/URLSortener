@@ -1,0 +1,8 @@
+RewriteEngine On
+
+# Solo redirigir si no es un archivo o directorio real
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Redirigir todo a redirect.php
+RewriteRule ^(.*)$ redirect.php?code=$1 [L,QSA]
