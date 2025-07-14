@@ -2,22 +2,18 @@
 // Mostrar errores para debugging (quitar en producción)
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
-
 session_start();
-
 // Verificar si está logueado
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
     header('Location: login.php');
     exit;
 }
-
 // Incluir configuración
 $config_file = '../conf.php';
 if (!file_exists($config_file)) {
     die("Error: No se encuentra el archivo de configuración conf.php");
 }
 require_once $config_file;
-
 // Conexión a la base de datos
 try {
     $db = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
@@ -25,16 +21,27 @@ try {
 } catch(PDOException $e) {
     die("Error de conexión: " . $e->getMessage());
 }
-
 $message = '';
 $messageType = 'info';
 $section = $_GET['section'] ?? 'dashboard';
-
 // Obtener información del usuario actual
 $user_id = $_SESSION['user_id'] ?? 1;
 $username = $_SESSION['username'] ?? 'Usuario';
 $user_role = $_SESSION['role'] ?? 'user';
 $is_admin = ($user_role === 'admin');
+
+// VERIFICACIÓN ESTRICTA: Solo el usuario con ID 1 es superadmin
+$is_superadmin = false;
+if ($user_id == 1) {
+    $is_superadmin = true;
+}
+
+// Verificar acceso a dominios - SOLO SUPERADMIN
+if ($section == 'domains' && !$is_superadmin) {
+    $message = "⛔ Acceso denegado. Solo el superadministrador puede gestionar dominios.";
+    $messageType = 'danger';
+    $section = 'dashboard'; // Redirigir al dashboard
+}
 
 // Función para registrar actividades
 function logActivity($db, $user_id, $action, $details) {
@@ -48,7 +55,6 @@ function logActivity($db, $user_id, $action, $details) {
         // Si no existe la tabla, ignorar
     }
 }
-
 // Función optimizada para geolocalización con caché
 function getGeoLocation($ip, $db) {
     // Primero buscar en caché (tabla click_stats)
@@ -132,7 +138,6 @@ function getGeoLocation($ip, $db) {
     
     return null;
 }
-
 // Procesar eliminación de URL
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_url_id'])) {
     $id = (int)$_POST['delete_url_id'];
@@ -166,7 +171,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_url_id'])) {
         $messageType = 'danger';
     }
 }
-
 // Crear nueva URL desde el panel
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_url'])) {
     $original_url = trim($_POST['original_url']);
@@ -180,37 +184,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_url'])) {
         $message = 'URL inválida';
         $messageType = 'danger';
     } else {
-        if (empty($custom_code)) {
-            do {
-                $custom_code = generateShortCode(); // Usando la función de conf.php
-                $stmt = $db->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
-                $stmt->execute([$custom_code]);
-            } while ($stmt->fetchColumn() > 0);
+        // Verificar que el usuario tiene permiso para usar este dominio
+        if ($domain_id && !$is_admin) {
+            $stmt = $db->prepare("
+                SELECT id FROM custom_domains 
+                WHERE id = ? AND status = 'active' 
+                AND (user_id = ? OR user_id IS NULL)
+            ");
+            $stmt->execute([$domain_id, $user_id]);
+            if (!$stmt->fetch()) {
+                $message = '❌ No tienes permiso para usar este dominio';
+                $messageType = 'danger';
+                $domain_id = null;
+            }
         }
         
-        try {
-            $stmt = $db->prepare("INSERT INTO urls (short_code, original_url, user_id, domain_id, created_at) VALUES (?, ?, ?, ?, NOW())");
-            $stmt->execute([$custom_code, $original_url, $user_id, $domain_id]);
-            $message = '✅ URL creada exitosamente';
-            $messageType = 'success';
-            logActivity($db, $user_id, 'create_url', "Creó URL: $custom_code");
-        } catch (Exception $e) {
-            $message = '❌ Error al crear URL: ' . $e->getMessage();
-            $messageType = 'danger';
+        if ($messageType !== 'danger') {
+            if (empty($custom_code)) {
+                do {
+                    $custom_code = generateShortCode(); // Usando la función de conf.php
+                    $stmt = $db->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
+                    $stmt->execute([$custom_code]);
+                } while ($stmt->fetchColumn() > 0);
+            }
+            
+            try {
+                $stmt = $db->prepare("INSERT INTO urls (short_code, original_url, user_id, domain_id, created_at) VALUES (?, ?, ?, ?, NOW())");
+                $stmt->execute([$custom_code, $original_url, $user_id, $domain_id]);
+                $message = '✅ URL creada exitosamente';
+                $messageType = 'success';
+                logActivity($db, $user_id, 'create_url', "Creó URL: $custom_code");
+            } catch (Exception $e) {
+                $message = '❌ Error al crear URL: ' . $e->getMessage();
+                $messageType = 'danger';
+            }
         }
     }
 }
-
-// Procesar acciones de dominios
+// Procesar acciones de dominios - SOLO SUPERADMIN
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
-    if (!$is_admin) {
+    if (!$is_superadmin) {
         $message = "❌ No tienes permisos para gestionar dominios";
         $messageType = 'danger';
     } else {
         switch ($_POST['domain_action']) {
             case 'add':
                 $domain = trim($_POST['domain']);
-                $domain_user_id = isset($_POST['user_id']) ? (int)$_POST['user_id'] : null;
+                $domain_user_id = isset($_POST['user_id']) && $_POST['user_id'] !== '' ? (int)$_POST['user_id'] : null;
                 
                 if (empty($domain)) {
                     $message = "❌ El dominio es requerido";
@@ -219,9 +239,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                     try {
                         $stmt = $db->prepare("INSERT INTO custom_domains (domain, user_id, status, created_at) VALUES (?, ?, 'active', NOW())");
                         $stmt->execute([$domain, $domain_user_id]);
-                        $message = "✅ Dominio añadido correctamente";
+                        
+                        $assigned_to = $domain_user_id ? "usuario ID $domain_user_id" : "todos los usuarios";
+                        $message = "✅ Dominio añadido y asignado a: $assigned_to";
                         $messageType = 'success';
-                        logActivity($db, $user_id, 'add_domain', "Añadió dominio: $domain");
+                        logActivity($db, $user_id, 'add_domain', "Añadió dominio: $domain para $assigned_to");
                     } catch (Exception $e) {
                         $message = "❌ Error al añadir dominio: " . $e->getMessage();
                         $messageType = 'danger';
@@ -264,6 +286,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                     $messageType = 'success';
                 } catch (Exception $e) {
                     $message = "❌ Error al actualizar dominio: " . $e->getMessage();
+                    $messageType = 'danger';
+                }
+                break;
+                
+            case 'update_user':
+                $domain_id = (int)$_POST['domain_id'];
+                $new_user_id = isset($_POST['new_user_id']) && $_POST['new_user_id'] !== '' ? (int)$_POST['new_user_id'] : null;
+                
+                try {
+                    $stmt = $db->prepare("UPDATE custom_domains SET user_id = ? WHERE id = ?");
+                    $stmt->execute([$new_user_id, $domain_id]);
+                    
+                    $assigned_to = $new_user_id ? "usuario ID $new_user_id" : "todos los usuarios";
+                    $message = "✅ Dominio reasignado a: $assigned_to";
+                    $messageType = 'success';
+                } catch (Exception $e) {
+                    $message = "❌ Error al actualizar asignación: " . $e->getMessage();
                     $messageType = 'danger';
                 }
                 break;
@@ -336,6 +375,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
             border-radius: 20px;
             display: inline-block;
             margin-top: 5px;
+        }
+        
+        .superadmin-badge {
+            display: inline-block;
+            background: #e74c3c;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            margin-left: 5px;
+            font-weight: bold;
         }
         
         .nav-menu {
@@ -586,6 +636,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
         .badge-warning { background: #fff3e0; color: #ff9800; }
         .badge-danger { background: #ffebee; color: #f44336; }
         .badge-secondary { background: #e9ecef; color: #6c757d; }
+        .badge-info { background: #e1f5fe; color: #0288d1; }
         
         /* Formularios */
         .form-group {
@@ -655,6 +706,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
             background: #ffebee;
             color: #c62828;
             border: 1px solid #ffcdd2;
+        }
+        
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
         }
         
         /* URL display */
@@ -919,6 +976,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                 grid-template-columns: 1fr;
             }
         }
+        
+        /* Domain assignment info */
+        .domain-assignment-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        
+        .assignment-rule {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        
+        .assignment-rule .icon {
+            font-size: 1.2em;
+        }
+        
+        .mini-form {
+            display: inline-flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .mini-select {
+            padding: 5px 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
     </style>
 </head>
 <body>
@@ -932,7 +1021,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
             <div class="sidebar-header">
                 <h3>🚀 URL Shortener</h3>
                 <div class="user-info">
-                    <div class="username"><?php echo htmlspecialchars($username); ?></div>
+                    <div class="username">
+                        <?php echo htmlspecialchars($username); ?>
+                        <?php if ($is_superadmin): ?>
+                        <span class="superadmin-badge">SUPER</span>
+                        <?php endif; ?>
+                    </div>
                     <span class="role"><?php echo $is_admin ? '👑 Administrador' : '👤 Usuario'; ?></span>
                 </div>
             </div>
@@ -950,11 +1044,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                 <a href="?section=geo" class="nav-item <?php echo $section === 'geo' ? 'active' : ''; ?>">
                     <span class="nav-icon">🌍</span> Geolocalización
                 </a>
-                <?php if ($is_admin): ?>
+                
                 <div class="nav-divider"></div>
+                
+                <?php if ($is_superadmin): ?>
+                <!-- SOLO EL SUPERADMIN VE LA OPCIÓN DE DOMINIOS -->
                 <a href="?section=domains" class="nav-item <?php echo $section === 'domains' ? 'active' : ''; ?>">
                     <span class="nav-icon">🌐</span> Dominios
+                    <span class="superadmin-badge" style="margin-left: auto;">SUPER</span>
                 </a>
+                <?php endif; ?>
+                
+                <?php if ($is_admin): ?>
+                <!-- TODOS LOS ADMINS VEN USUARIOS -->
                 <a href="usuarios.php" class="nav-item">
                     <span class="nav-icon">👥</span> Usuarios
                 </a>
@@ -1216,13 +1318,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
             <!-- Gestión de URLs -->
             <?php elseif ($section === 'urls'): ?>
                 <?php
-                // Obtener dominios disponibles para el selector
+                // CONSULTA MODIFICADA: Solo mostrar dominios disponibles para el usuario actual
                 $available_domains = [];
                 try {
-                    if ($is_admin) {
+                    if ($is_superadmin) {
+                        // El superadmin ve todos los dominios activos
                         $stmt = $db->query("SELECT id, domain FROM custom_domains WHERE status = 'active' ORDER BY domain");
                     } else {
-                        $stmt = $db->prepare("SELECT id, domain FROM custom_domains WHERE status = 'active' AND (user_id = ? OR user_id IS NULL) ORDER BY domain");
+                        // Los demás usuarios solo ven dominios asignados a ellos o sin asignar
+                        $stmt = $db->prepare("
+                            SELECT id, domain 
+                            FROM custom_domains 
+                            WHERE status = 'active' 
+                            AND (user_id = ? OR user_id IS NULL) 
+                            ORDER BY domain
+                        ");
                         $stmt->execute([$user_id]);
                     }
                     $available_domains = $stmt->fetchAll();
@@ -1784,8 +1894,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                     <?php endif; ?>
                 </div>
             
-            <!-- Gestión de Dominios -->
-            <?php elseif ($section === 'domains' && $is_admin): ?>
+            <!-- Gestión de Dominios - SOLO SUPERADMIN -->
+            <?php elseif ($section === 'domains' && $is_superadmin): ?>
+                <!-- Información sobre asignación de dominios -->
+                <div class="domain-assignment-info">
+                    <h3>📌 Reglas de Asignación de Dominios</h3>
+                    <div class="assignment-rule">
+                        <span class="icon">👥</span>
+                        <span><strong>Sin usuario asignado:</strong> El dominio está disponible para TODOS los usuarios</span>
+                    </div>
+                    <div class="assignment-rule">
+                        <span class="icon">👤</span>
+                        <span><strong>Con usuario asignado:</strong> SOLO ese usuario puede usar el dominio</span>
+                    </div>
+                    <div class="assignment-rule">
+                        <span class="icon">👑</span>
+                        <span><strong>Superadmin:</strong> Siempre puede usar todos los dominios</span>
+                    </div>
+                </div>
+                
                 <!-- Formulario para añadir dominio -->
                 <div class="data-table" style="margin-bottom: 30px;">
                     <h3>➕ Añadir nuevo dominio</h3>
@@ -1801,9 +1928,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                                 <small style="color: #7f8c8d;">Sin http:// ni https://</small>
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Asignar a usuario (opcional):</label>
+                                <label class="form-label">Asignar a usuario:</label>
                                 <select name="user_id" class="form-select">
-                                    <option value="">Disponible para todos</option>
+                                    <option value="">👥 Disponible para todos</option>
                                     <?php
                                     try {
                                         $stmt = $db->query("SELECT id, username FROM users WHERE status = 'active' ORDER BY username");
@@ -1811,7 +1938,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                                         foreach ($users as $user):
                                     ?>
                                     <option value="<?php echo $user['id']; ?>">
-                                        <?php echo htmlspecialchars($user['username']); ?>
+                                        👤 <?php echo htmlspecialchars($user['username']); ?> (solo este usuario)
                                     </option>
                                     <?php 
                                         endforeach;
@@ -1866,7 +1993,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                             <tr>
                                 <th>Dominio</th>
                                 <th>Estado</th>
-                                <th>Usuario</th>
+                                <th>Asignado a</th>
                                 <th>URLs</th>
                                 <th>Creado</th>
                                 <th>Acciones</th>
@@ -1892,14 +2019,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                                 </td>
                                 <td>
                                     <?php if ($domain['username']): ?>
-                                        <span class="badge badge-secondary">
+                                        <span class="badge badge-warning">
                                             👤 <?php echo htmlspecialchars($domain['username']); ?>
                                         </span>
+                                        <small style="color: #856404; display: block; font-size: 0.75em;">
+                                            Solo este usuario
+                                        </small>
                                     <?php else: ?>
                                         <span class="badge badge-info">
-                                            👥 Todos
+                                            👥 Todos los usuarios
                                         </span>
                                     <?php endif; ?>
+                                    
+                                    <!-- Mini formulario para cambiar asignación -->
+                                    <form method="POST" class="mini-form" style="margin-top: 5px;">
+                                        <input type="hidden" name="domain_action" value="update_user">
+                                        <input type="hidden" name="domain_id" value="<?php echo $domain['id']; ?>">
+                                        <select name="new_user_id" class="mini-select" onchange="this.form.submit()">
+                                            <option value="">Cambiar a...</option>
+                                            <option value="">👥 Todos</option>
+                                            <?php foreach ($users as $user): ?>
+                                            <option value="<?php echo $user['id']; ?>">
+                                                👤 <?php echo htmlspecialchars($user['username']); ?>
+                                            </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </form>
                                 </td>
                                 <td>
                                     <span class="badge badge-primary">

@@ -1,15 +1,12 @@
 <?php
 session_start();
 require_once 'conf.php';
-
 // Obtener el código corto
 $shortCode = $_GET['code'] ?? '';
-
 if (empty($shortCode)) {
     header('Location: index.php');
     exit();
 }
-
 // Conectar a la base de datos
 try {
     $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
@@ -17,20 +14,16 @@ try {
 } catch(PDOException $e) {
     die("Error de conexión: " . $e->getMessage());
 }
-
 // Detectar desde qué dominio se está accediendo
 $current_domain = $_SERVER['HTTP_HOST'];
 $accessing_from_custom = false;
-
 // Verificar si es un dominio personalizado
 $stmt = $pdo->prepare("SELECT * FROM custom_domains WHERE domain = ? AND status = 'active'");
 $stmt->execute([$current_domain]);
 $custom_domain_info = $stmt->fetch();
-
 if ($custom_domain_info) {
     $accessing_from_custom = true;
 }
-
 // Obtener información de la URL con el dominio personalizado
 try {
     $stmt = $pdo->prepare("
@@ -47,11 +40,9 @@ try {
     $stmt->execute([$shortCode]);
     $url_data = $stmt->fetch();
 }
-
 if (!$url_data) {
     die("URL no encontrada");
 }
-
 // Determinar qué dominio usar para mostrar
 // Prioridad: 1) Dominio desde el que se accede, 2) Dominio guardado, 3) Dominio por defecto
 if ($accessing_from_custom && $custom_domain_info['user_id'] == $url_data['user_id']) {
@@ -67,7 +58,6 @@ if ($accessing_from_custom && $custom_domain_info['user_id'] == $url_data['user_
     $short_url_display = BASE_URL . $shortCode;
     $domain_used = parse_url(BASE_URL, PHP_URL_HOST);
 }
-
 // Verificar si el usuario puede ver estadísticas completas
 $can_view_full_stats = false;
 if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
@@ -75,11 +65,10 @@ if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true
         $can_view_full_stats = true;
     }
 }
+// Obtener estadísticas básicas CON LÍMITE
+$total_clicks = min($url_data['clicks'], 999999); // Limitar a 999,999 para evitar números extremos
 
-// Obtener estadísticas básicas
-$total_clicks = $url_data['clicks'];
-
-// Obtener estadísticas detalladas
+// Obtener estadísticas detalladas con LÍMITES y VALIDACIÓN
 $stmt = $pdo->prepare("
     SELECT 
         DATE(clicked_at) as click_date,
@@ -92,6 +81,11 @@ $stmt = $pdo->prepare("
 ");
 $stmt->execute([$url_data['id']]);
 $daily_stats = $stmt->fetchAll();
+
+// Validar y limitar valores de clicks diarios
+foreach ($daily_stats as &$stat) {
+    $stat['daily_clicks'] = min((int)$stat['daily_clicks'], 10000); // Máximo 10,000 clicks por día
+}
 
 // Estadísticas por dispositivo
 $stmt = $pdo->prepare("
@@ -123,6 +117,11 @@ $stmt = $pdo->prepare("
 $stmt->execute([$url_data['id']]);
 $hourly_stats = $stmt->fetchAll();
 
+// Validar y limitar valores por hora
+foreach ($hourly_stats as &$stat) {
+    $stat['clicks'] = min((int)$stat['clicks'], 5000); // Máximo 5,000 clicks por hora
+}
+
 // Obtener los últimos clicks
 $stmt = $pdo->prepare("
     SELECT clicked_at, ip_address, user_agent
@@ -134,19 +133,19 @@ $stmt = $pdo->prepare("
 $stmt->execute([$url_data['id']]);
 $recent_clicks = $stmt->fetchAll();
 
-// Preparar datos para gráficos
+// Preparar datos para gráficos con VALIDACIÓN
 $dates = [];
 $clicks = [];
 foreach (array_reverse($daily_stats) as $stat) {
     $dates[] = date('d/m', strtotime($stat['click_date']));
-    $clicks[] = $stat['daily_clicks'];
+    $clicks[] = (int)$stat['daily_clicks']; // Asegurar que es entero
 }
 
 $devices = [];
 $device_counts = [];
 foreach ($device_stats as $stat) {
     $devices[] = $stat['device_type'];
-    $device_counts[] = $stat['count'];
+    $device_counts[] = min((int)$stat['count'], 999999); // Limitar valores extremos
 }
 
 // Debug info
@@ -157,10 +156,10 @@ $debug = isset($_GET['debug']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Estadísticas - <?php echo $shortCode; ?></title>
+    <title>Estadísticas - <?php echo htmlspecialchars($shortCode); ?></title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <style>
         body {
             background-color: #f8f9fa;
@@ -197,6 +196,8 @@ $debug = isset($_GET['debug']);
             padding: 20px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             margin-bottom: 20px;
+            position: relative;
+            min-height: 300px;
         }
         .domain-badge {
             background: #667eea;
@@ -269,6 +270,10 @@ $debug = isset($_GET['debug']);
             border-radius: 5px;
             font-size: 0.85em;
         }
+        /* Prevenir overflow en gráficos */
+        canvas {
+            max-height: 400px !important;
+        }
     </style>
 </head>
 <body>
@@ -285,11 +290,11 @@ $debug = isset($_GET['debug']);
         <?php if ($debug): ?>
         <div class="debug-info">
             <strong>DEBUG INFO:</strong><br>
-            Dominio actual (HTTP_HOST): <?php echo $current_domain; ?><br>
+            Dominio actual (HTTP_HOST): <?php echo htmlspecialchars($current_domain); ?><br>
             Es dominio personalizado: <?php echo $accessing_from_custom ? 'Sí' : 'No'; ?><br>
-            Dominio guardado en URL: <?php echo $url_data['custom_domain'] ?? 'Ninguno'; ?><br>
-            Dominio mostrado: <?php echo $domain_used; ?><br>
-            Domain ID: <?php echo $url_data['domain_id'] ?? 'NULL'; ?>
+            Dominio guardado en URL: <?php echo htmlspecialchars($url_data['custom_domain'] ?? 'Ninguno'); ?><br>
+            Dominio mostrado: <?php echo htmlspecialchars($domain_used); ?><br>
+            Domain ID: <?php echo htmlspecialchars($url_data['domain_id'] ?? 'NULL'); ?>
         </div>
         <?php endif; ?>
         
@@ -306,7 +311,7 @@ $debug = isset($_GET['debug']);
                     
                     <div class="info-label">URL Corta:</div>
                     <div class="input-group mb-3" style="max-width: 500px;">
-                        <input type="text" class="form-control" value="<?php echo $short_url_display; ?>" 
+                        <input type="text" class="form-control" value="<?php echo htmlspecialchars($short_url_display); ?>" 
                                id="shortUrlInput" readonly>
                         <button class="btn btn-primary copy-btn" onclick="copyToClipboard()">
                             <i class="bi bi-clipboard"></i> Copiar
@@ -316,7 +321,7 @@ $debug = isset($_GET['debug']);
                     
                     <div class="domain-info">
                         <div class="domain-badge">
-                            <i class="bi bi-globe"></i> <?php echo $domain_used; ?>
+                            <i class="bi bi-globe"></i> <?php echo htmlspecialchars($domain_used); ?>
                         </div>
                         <?php if ($accessing_from_custom): ?>
                         <div class="access-indicator">
@@ -329,8 +334,8 @@ $debug = isset($_GET['debug']);
                     <div class="mt-2">
                         <small class="text-muted">
                             También disponible en: 
-                            <a href="http://<?php echo $url_data['custom_domain']; ?>/<?php echo $shortCode; ?>">
-                                <?php echo $url_data['custom_domain']; ?>
+                            <a href="http://<?php echo htmlspecialchars($url_data['custom_domain']); ?>/<?php echo htmlspecialchars($shortCode); ?>">
+                                <?php echo htmlspecialchars($url_data['custom_domain']); ?>
                             </a>
                         </small>
                     </div>
@@ -367,7 +372,7 @@ $debug = isset($_GET['debug']);
                     <h3>
                         <?php 
                         $avg_clicks = count($daily_stats) > 0 ? round($total_clicks / count($daily_stats), 1) : 0;
-                        echo $avg_clicks;
+                        echo number_format($avg_clicks, 1);
                         ?>
                     </h3>
                     <p class="mb-0">Promedio/Día</p>
@@ -393,13 +398,13 @@ $debug = isset($_GET['debug']);
             <div class="col-md-8">
                 <div class="chart-container">
                     <h5>📈 Clicks por día (últimos 30 días)</h5>
-                    <canvas id="dailyChart"></canvas>
+                    <canvas id="dailyChart" style="max-height: 350px;"></canvas>
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="chart-container">
                     <h5>📱 Dispositivos</h5>
-                    <canvas id="deviceChart"></canvas>
+                    <canvas id="deviceChart" style="max-height: 200px;"></canvas>
                     <div class="mt-3">
                         <?php foreach ($device_stats as $device): ?>
                         <div class="d-flex justify-content-between align-items-center mb-2">
@@ -411,9 +416,9 @@ $debug = isset($_GET['debug']);
                                 <?php else: ?>
                                     <i class="bi bi-laptop device-icon"></i>
                                 <?php endif; ?>
-                                <?php echo $device['device_type']; ?>
+                                <?php echo htmlspecialchars($device['device_type']); ?>
                             </span>
-                            <span class="badge bg-primary"><?php echo $device['count']; ?></span>
+                            <span class="badge bg-primary"><?php echo number_format($device['count']); ?></span>
                         </div>
                         <?php endforeach; ?>
                     </div>
@@ -457,7 +462,7 @@ $debug = isset($_GET['debug']);
                                 // Ocultar parte de la IP por privacidad
                                 $ip_parts = explode('.', $click['ip_address']);
                                 if (count($ip_parts) >= 4) {
-                                    echo $ip_parts[0] . '.' . $ip_parts[1] . '.***.' . $ip_parts[3];
+                                    echo htmlspecialchars($ip_parts[0] . '.' . $ip_parts[1] . '.***.' . $ip_parts[3]);
                                 } else {
                                     echo 'IP no válida';
                                 }
@@ -525,7 +530,7 @@ $debug = isset($_GET['debug']);
                 <i class="bi bi-printer"></i> Imprimir
             </button>
             <?php endif; ?>
-            <a href="<?php echo $short_url_display; ?>" target="_blank" class="btn btn-success">
+            <a href="<?php echo htmlspecialchars($short_url_display); ?>" target="_blank" class="btn btn-success">
                 <i class="bi bi-box-arrow-up-right"></i> Abrir URL
             </a>
         </div>
@@ -551,6 +556,10 @@ $debug = isset($_GET['debug']);
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     
     <script>
+        // Configuración global para prevenir animaciones infinitas
+        Chart.defaults.animation.duration = 1000;
+        Chart.defaults.animation.loop = false;
+        
         // Generar código QR
         var qrcode = new QRCode(document.getElementById("qrcode"), {
             text: "<?php echo $short_url_display; ?>",
@@ -585,11 +594,16 @@ $debug = isset($_GET['debug']);
         }
         
         <?php if ($can_view_full_stats && count($dates) > 0): ?>
-        // Configurar gráficos
+        // Destruir gráficos existentes si los hay
+        if (window.dailyChart) window.dailyChart.destroy();
+        if (window.deviceChart) window.deviceChart.destroy();
+        if (window.hourlyChart) window.hourlyChart.destroy();
+        
+        // Configurar gráficos con animaciones limitadas
         
         // Gráfico de clicks por día
         const dailyCtx = document.getElementById('dailyChart').getContext('2d');
-        new Chart(dailyCtx, {
+        window.dailyChart = new Chart(dailyCtx, {
             type: 'line',
             data: {
                 labels: <?php echo json_encode($dates); ?>,
@@ -610,6 +624,15 @@ $debug = isset($_GET['debug']);
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
+                animation: {
+                    duration: 1000,
+                    loop: false,
+                    onComplete: function() {
+                        // Detener cualquier animación después de completarse
+                        this.options.animation = false;
+                    }
+                },
                 plugins: {
                     legend: {
                         display: false
@@ -631,8 +654,9 @@ $debug = isset($_GET['debug']);
                 scales: {
                     y: {
                         beginAtZero: true,
+                        max: Math.max(...<?php echo json_encode($clicks); ?>) * 1.2, // Límite máximo dinámico
                         ticks: {
-                            stepSize: 1,
+                            stepSize: Math.ceil(Math.max(...<?php echo json_encode($clicks); ?>) / 10),
                             font: {
                                 size: 12
                             }
@@ -657,7 +681,7 @@ $debug = isset($_GET['debug']);
         
         // Gráfico de dispositivos
         const deviceCtx = document.getElementById('deviceChart').getContext('2d');
-        new Chart(deviceCtx, {
+        window.deviceChart = new Chart(deviceCtx, {
             type: 'doughnut',
             data: {
                 labels: <?php echo json_encode($devices); ?>,
@@ -673,6 +697,13 @@ $debug = isset($_GET['debug']);
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
+                animation: {
+                    duration: 1000,
+                    loop: false,
+                    animateRotate: true,
+                    animateScale: false
+                },
                 plugins: {
                     legend: {
                         display: false
@@ -695,10 +726,13 @@ $debug = isset($_GET['debug']);
         const hourlyCtx = document.getElementById('hourlyChart').getContext('2d');
         const hourlyData = new Array(24).fill(0);
         <?php foreach ($hourly_stats as $stat): ?>
-        hourlyData[<?php echo $stat['hour']; ?>] = <?php echo $stat['clicks']; ?>;
+        hourlyData[<?php echo (int)$stat['hour']; ?>] = <?php echo (int)$stat['clicks']; ?>;
         <?php endforeach; ?>
         
-        new Chart(hourlyCtx, {
+        // Calcular máximo para el gráfico de horas
+        const maxHourlyClicks = Math.max(...hourlyData, 1);
+        
+        window.hourlyChart = new Chart(hourlyCtx, {
             type: 'bar',
             data: {
                 labels: Array.from({length: 24}, (_, i) => i + ':00'),
@@ -714,6 +748,13 @@ $debug = isset($_GET['debug']);
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                animation: {
+                    duration: 1000,
+                    loop: false,
+                    onComplete: function() {
+                        this.options.animation = false;
+                    }
+                },
                 plugins: {
                     legend: {
                         display: false
@@ -740,8 +781,9 @@ $debug = isset($_GET['debug']);
                 scales: {
                     y: {
                         beginAtZero: true,
+                        max: maxHourlyClicks * 1.2, // Límite máximo dinámico
                         ticks: {
-                            stepSize: 1,
+                            stepSize: Math.ceil(maxHourlyClicks / 10),
                             font: {
                                 size: 12
                             }
@@ -763,6 +805,16 @@ $debug = isset($_GET['debug']);
                         }
                     }
                 }
+            }
+        });
+        
+        // Prevenir actualizaciones automáticas no deseadas
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                // Detener animaciones cuando la página no es visible
+                if (window.dailyChart) window.dailyChart.options.animation = false;
+                if (window.deviceChart) window.deviceChart.options.animation = false;
+                if (window.hourlyChart) window.hourlyChart.options.animation = false;
             }
         });
         <?php endif; ?>

@@ -1,22 +1,22 @@
 <?php
 session_start();
 require_once 'conf.php';
-
 // CONFIGURACIÓN DE SEGURIDAD - Cambia esto según necesites
 define('REQUIRE_LOGIN_TO_SHORTEN', true); // true = requiere login, false = público
 define('ALLOW_ANONYMOUS_VIEW', true);      // true = permite ver la página sin login
-
 // Verificar si el usuario está logueado
 $is_logged_in = isset($_SESSION['user_id']) || isset($_SESSION['admin_logged_in']);
 $user_id = $_SESSION['user_id'] ?? 1;
 $username = $_SESSION['username'] ?? 'Invitado';
+
+// Verificar si es superadmin
+$is_superadmin = ($user_id == 1);
 
 // Si se requiere login y no está logueado, redirigir
 if (REQUIRE_LOGIN_TO_SHORTEN && !$is_logged_in && !ALLOW_ANONYMOUS_VIEW) {
     header('Location: admin/login.php');
     exit;
 }
-
 // Conexión a la base de datos
 try {
     $db = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
@@ -24,11 +24,9 @@ try {
 } catch(PDOException $e) {
     die("Error de conexión: " . $e->getMessage());
 }
-
 $message = '';
 $messageType = 'info';
 $shortened_url = '';
-
 // Procesar el formulario solo si está logueado o no se requiere login
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['url'])) {
     // Verificar nuevamente el login si es requerido
@@ -45,63 +43,94 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['url'])) {
             $message = '❌ Por favor, introduce una URL válida';
             $messageType = 'danger';
         } else {
-            // Generar código si no se proporcionó uno personalizado
-            if (empty($custom_code)) {
-                do {
-                    $custom_code = generateShortCode();
-                    $stmt = $db->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
-                    $stmt->execute([$custom_code]);
-                } while ($stmt->fetchColumn() > 0);
-            } else {
-                // Verificar que el código personalizado no existe
-                $stmt = $db->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
-                $stmt->execute([$custom_code]);
-                if ($stmt->fetchColumn() > 0) {
-                    $message = '❌ Ese código ya está en uso. Por favor, elige otro.';
+            // NUEVA VALIDACIÓN: Verificar que el usuario puede usar el dominio seleccionado
+            if ($domain_id && !$is_superadmin) {
+                $stmt = $db->prepare("
+                    SELECT id FROM custom_domains 
+                    WHERE id = ? AND status = 'active' 
+                    AND (user_id = ? OR user_id IS NULL)
+                ");
+                $stmt->execute([$domain_id, $user_id]);
+                if (!$stmt->fetch()) {
+                    $message = '❌ No tienes permiso para usar este dominio';
                     $messageType = 'danger';
-                    $custom_code = '';
+                    $domain_id = null; // Resetear a dominio principal
                 }
             }
             
-            if (!empty($custom_code)) {
-                try {
-                    // Insertar la URL con el user_id correcto
-                    $stmt = $db->prepare("
-                        INSERT INTO urls (short_code, original_url, user_id, domain_id, created_at) 
-                        VALUES (?, ?, ?, ?, NOW())
-                    ");
-                    $stmt->execute([$custom_code, $original_url, $user_id, $domain_id]);
-                    
-                    // Obtener dominio si se seleccionó uno personalizado
-                    if ($domain_id) {
-                        $stmt = $db->prepare("SELECT domain FROM custom_domains WHERE id = ?");
-                        $stmt->execute([$domain_id]);
-                        $custom_domain = $stmt->fetch()['domain'];
-                        $shortened_url = "https://" . $custom_domain . "/" . $custom_code;
-                    } else {
-                        $shortened_url = rtrim(BASE_URL, '/') . '/' . $custom_code;
+            // Continuar solo si no hay errores
+            if ($messageType !== 'danger') {
+                // Generar código si no se proporcionó uno personalizado
+                if (empty($custom_code)) {
+                    do {
+                        $custom_code = generateShortCode();
+                        $stmt = $db->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
+                        $stmt->execute([$custom_code]);
+                    } while ($stmt->fetchColumn() > 0);
+                } else {
+                    // Verificar que el código personalizado no existe
+                    $stmt = $db->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
+                    $stmt->execute([$custom_code]);
+                    if ($stmt->fetchColumn() > 0) {
+                        $message = '❌ Ese código ya está en uso. Por favor, elige otro.';
+                        $messageType = 'danger';
+                        $custom_code = '';
                     }
-                    
-                    $message = '✅ ¡URL acortada con éxito!';
-                    $messageType = 'success';
-                } catch (PDOException $e) {
-                    $message = '❌ Error al crear la URL corta: ' . $e->getMessage();
-                    $messageType = 'danger';
+                }
+                
+                if (!empty($custom_code)) {
+                    try {
+                        // Insertar la URL con el user_id correcto
+                        $stmt = $db->prepare("
+                            INSERT INTO urls (short_code, original_url, user_id, domain_id, created_at) 
+                            VALUES (?, ?, ?, ?, NOW())
+                        ");
+                        $stmt->execute([$custom_code, $original_url, $user_id, $domain_id]);
+                        
+                        // Obtener dominio si se seleccionó uno personalizado
+                        if ($domain_id) {
+                            $stmt = $db->prepare("SELECT domain FROM custom_domains WHERE id = ?");
+                            $stmt->execute([$domain_id]);
+                            $custom_domain = $stmt->fetch()['domain'];
+                            $shortened_url = "https://" . $custom_domain . "/" . $custom_code;
+                        } else {
+                            $shortened_url = rtrim(BASE_URL, '/') . '/' . $custom_code;
+                        }
+                        
+                        $message = '✅ ¡URL acortada con éxito!';
+                        $messageType = 'success';
+                    } catch (PDOException $e) {
+                        $message = '❌ Error al crear la URL corta: ' . $e->getMessage();
+                        $messageType = 'danger';
+                    }
                 }
             }
         }
     }
 }
-
-// Obtener dominios disponibles
+// CONSULTA MODIFICADA: Obtener dominios disponibles según el usuario
 $available_domains = [];
-try {
-    $stmt = $db->query("SELECT id, domain FROM custom_domains WHERE status = 'active' ORDER BY domain");
-    $available_domains = $stmt->fetchAll();
-} catch (Exception $e) {
-    // Ignorar si no existe la tabla
+if ($is_logged_in) {
+    try {
+        if ($is_superadmin) {
+            // El superadmin ve todos los dominios activos
+            $stmt = $db->query("SELECT id, domain FROM custom_domains WHERE status = 'active' ORDER BY domain");
+        } else {
+            // Los usuarios normales solo ven dominios asignados a ellos o sin asignar
+            $stmt = $db->prepare("
+                SELECT id, domain 
+                FROM custom_domains 
+                WHERE status = 'active' 
+                AND (user_id = ? OR user_id IS NULL) 
+                ORDER BY domain
+            ");
+            $stmt->execute([$user_id]);
+        }
+        $available_domains = $stmt->fetchAll();
+    } catch (Exception $e) {
+        // Ignorar si no existe la tabla
+    }
 }
-
 // Obtener estadísticas generales
 try {
     $stmt = $db->query("SELECT COUNT(*) as total FROM urls");
@@ -135,7 +164,6 @@ try {
     $total_clicks = 0;
     $recent_urls = [];
 }
-
 // Si el usuario está logueado, obtener sus estadísticas
 $user_stats = null;
 if ($is_logged_in && $user_id > 1) {
@@ -496,6 +524,17 @@ if ($is_logged_in && $user_id > 1) {
                 opacity: 1;
                 transform: translateY(0);
             }
+        }
+        
+        /* Domain select info */
+        .domain-info {
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 0.85em;
+            margin-top: 5px;
+            display: inline-block;
         }
         
         /* Result Box */
@@ -994,6 +1033,11 @@ if ($is_logged_in && $user_id > 1) {
                                 </option>
                                 <?php endforeach; ?>
                             </select>
+                            <?php if (!$is_superadmin && $is_logged_in): ?>
+                            <div class="domain-info">
+                                ℹ️ Solo ves dominios disponibles para ti
+                            </div>
+                            <?php endif; ?>
                         </div>
                         <?php endif; ?>
                     </div>
