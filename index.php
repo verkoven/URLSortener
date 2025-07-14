@@ -4,17 +4,16 @@ require_once 'conf.php';
 // CONFIGURACIÓN DE SEGURIDAD - Cambia esto según necesites
 define('REQUIRE_LOGIN_TO_SHORTEN', true); // true = requiere login, false = público
 define('ALLOW_ANONYMOUS_VIEW', true);      // true = permite ver la página sin login
+
 // Verificar si el usuario está logueado
 $is_logged_in = isset($_SESSION['user_id']) || isset($_SESSION['admin_logged_in']);
 $user_id = $_SESSION['user_id'] ?? 1;
 $username = $_SESSION['username'] ?? 'Invitado';
-
 // Verificar si es superadmin
 $is_superadmin = ($user_id == 1);
-
 // Si se requiere login y no está logueado, redirigir
 if (REQUIRE_LOGIN_TO_SHORTEN && !$is_logged_in && !ALLOW_ANONYMOUS_VIEW) {
-    header('Location: admin/login.php');
+    header('Location: ' . rtrim(BASE_URL, '/') . '/admin/login.php');
     exit;
 }
 // Conexión a la base de datos
@@ -907,11 +906,11 @@ if ($is_logged_in && $user_id > 1) {
                 <?php if ($is_logged_in): ?>
                 <div class="user-info">
                     <span>👤 <?php echo htmlspecialchars($username); ?></span>
-                    <a href="/admin/panel_simple.php" class="btn-login">Panel Admin</a>
-                    <a href="/admin/logout.php" class="btn-logout">Cerrar Sesión</a>
+                    <a href="<?php echo rtrim(BASE_URL, '/'); ?>/admin/panel_simple.php" class="btn-login">Panel Admin</a>
+                    <a href="<?php echo rtrim(BASE_URL, '/'); ?>/admin/logout.php" class="btn-logout">Cerrar Sesión</a>
                 </div>
                 <?php else: ?>
-                <a href="/admin/login.php" class="btn-login">Iniciar Sesión</a>
+                <a href="<?php echo rtrim(BASE_URL, '/'); ?>/admin/login.php" class="btn-login">Iniciar Sesión</a>
                 <?php endif; ?>
             </nav>
         </div>
@@ -978,7 +977,7 @@ if ($is_logged_in && $user_id > 1) {
             <div class="login-required">
                 <h3>🔒 Inicio de sesión requerido</h3>
                 <p>Para crear URLs cortas necesitas iniciar sesión.</p>
-                <p><a href="/admin/login.php">Iniciar Sesión</a> o <a href="/admin/login.php?register=1">Registrarse</a></p>
+                <p><a href="<?php echo rtrim(BASE_URL, '/'); ?>/admin/login.php">Iniciar Sesión</a> o <a href="<?php echo rtrim(BASE_URL, '/'); ?>/admin/login.php?register=1">Registrarse</a></p>
             </div>
             <?php endif; ?>
             
@@ -1157,7 +1156,7 @@ if ($is_logged_in && $user_id > 1) {
             © <?php echo date('Y'); ?> URL Shortener | 
             <a href="/privacy">Privacidad</a> | 
             <a href="/terms">Términos</a> | 
-            <a href="/admin">Admin</a>
+            <a href="<?php echo rtrim(BASE_URL, '/'); ?>/admin">Admin</a>
         </p>
     </footer>
     
