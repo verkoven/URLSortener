@@ -164,3 +164,4 @@ CREATE TABLE `click_stats` (
   KEY `clicked_at` (`clicked_at`),
   FOREIGN KEY (`url_id`) REFERENCES `urls`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+ALTER TABLE click_stats ADD COLUMN accessed_domain VARCHAR(255) DEFAULT NULL;
