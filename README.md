@@ -165,3 +165,17 @@ CREATE TABLE `click_stats` (
   FOREIGN KEY (`url_id`) REFERENCES `urls`(`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 ALTER TABLE click_stats ADD COLUMN accessed_domain VARCHAR(255) DEFAULT NULL;
+-- Crear la tabla
+CREATE TABLE IF NOT EXISTS `users` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `username` varchar(50) NOT NULL,
+  `email` varchar(100) NOT NULL,
+  `password` varchar(255) NOT NULL,
+  `role` enum('admin','user') DEFAULT 'user',
+  `status` enum('active','inactive') DEFAULT 'active',
+  `created_at` datetime DEFAULT NULL,
+  `last_login` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `username` (`username`),
+  UNIQUE KEY `email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
