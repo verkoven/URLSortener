@@ -86,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login'])) {
                     if ($user['role'] === 'admin') {
                         header('Location: panel_simple.php');
                     } else {
-                        header('Location: ../index.php');
+                        header('Location: ../index.php?welcome=1');
                     }
                     exit();
                 } else {
@@ -107,12 +107,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
     } else {
         $username = trim($_POST['username']);
         $email = trim($_POST['email']);
+        $full_name = trim($_POST['full_name'] ?? '');
         $password = $_POST['password'];
         $password_confirm = $_POST['password_confirm'];
         
+        // Si no se proporciona full_name, usar el username
+        if (empty($full_name)) {
+            $full_name = $username;
+        }
+        
         // Validaciones
         if (empty($username) || empty($email) || empty($password) || empty($password_confirm)) {
-            $error = 'Por favor, completa todos los campos';
+            $error = 'Por favor, completa todos los campos obligatorios';
         } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $error = 'El email no es válido';
         } elseif (strlen($password) < 6) {
@@ -129,14 +135,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                 } else {
                     // Crear el usuario
                     $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                    $stmt = $db->prepare("
-                        INSERT INTO users (username, email, password, role, status, created_at) 
-                        VALUES (?, ?, ?, 'user', 'active', NOW())
-                    ");
-                    $stmt->execute([$username, $email, $hashed_password]);
                     
-                    $success = '✅ Cuenta creada exitosamente. Ya puedes iniciar sesión.';
-                    $show_register = false;
+                    // Verificar qué columnas existen en la tabla
+                    $columns = $db->query("SHOW COLUMNS FROM users")->fetchAll(PDO::FETCH_COLUMN);
+                    
+                    // Construir la consulta dinámicamente
+                    if (in_array('full_name', $columns)) {
+                        $stmt = $db->prepare("
+                            INSERT INTO users (username, email, password, full_name, role, status, created_at) 
+                            VALUES (?, ?, ?, ?, 'user', 'active', NOW())
+                        ");
+                        $stmt->execute([$username, $email, $hashed_password, $full_name]);
+                    } else {
+                        $stmt = $db->prepare("
+                            INSERT INTO users (username, email, password, role, status, created_at) 
+                            VALUES (?, ?, ?, 'user', 'active', NOW())
+                        ");
+                        $stmt->execute([$username, $email, $hashed_password]);
+                    }
+                    
+                    // Auto-login después del registro exitoso
+                    $_SESSION['admin_logged_in'] = true;
+                    $_SESSION['user_id'] = $db->lastInsertId();
+                    $_SESSION['username'] = $username;
+                    $_SESSION['role'] = 'user';
+                    
+                    // Redirigir al index con mensaje de bienvenida
+                    header('Location: ../index.php?welcome=1');
+                    exit();
                 }
             } catch (PDOException $e) {
                 $error = 'Error al crear la cuenta: ' . $e->getMessage();
@@ -360,6 +386,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
             }
         }
         
+        .optional-label {
+            color: #6c757d;
+            font-size: 0.85em;
+            font-weight: normal;
+        }
+        
         /* Responsive */
         @media (max-width: 576px) {
             .login-header h1 {
@@ -386,7 +418,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                             <i class="bi bi-link-45deg" style="font-size: 4rem; color: white;"></i>
                         </div>
                         <h1>URL Shortener</h1>
-                        <p><?php echo $show_register ? 'Crear Cuenta' : 'Panel de Administración'; ?></p>
+                        <p><?php echo $show_register ? 'Crear Cuenta Gratis' : 'Panel de Administración'; ?></p>
                     </div>
                     
                     <div class="login-body">
@@ -448,7 +480,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                         </form>
                         
                         <div class="switch-form">
-                            ¿No tienes cuenta? <a href="?register=1">Regístrate aquí</a>
+                            ¿No tienes cuenta? <a href="?register=1">Regístrate gratis aquí</a>
                         </div>
                         <?php else: ?>
                         <!-- Formulario de Registro -->
@@ -457,7 +489,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                             
                             <div class="mb-3">
                                 <label for="username" class="form-label text-muted mb-2">
-                                    <i class="bi bi-person"></i> Usuario
+                                    <i class="bi bi-person"></i> Usuario <span class="text-danger">*</span>
                                 </label>
                                 <input type="text" 
                                        class="form-control" 
@@ -471,8 +503,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                             </div>
                             
                             <div class="mb-3">
+                                <label for="full_name" class="form-label text-muted mb-2">
+                                    <i class="bi bi-person-badge"></i> Nombre Completo <span class="optional-label">(opcional)</span>
+                                </label>
+                                <input type="text" 
+                                       class="form-control" 
+                                       id="full_name" 
+                                       name="full_name" 
+                                       placeholder="Tu nombre completo">
+                            </div>
+                            
+                            <div class="mb-3">
                                 <label for="email" class="form-label text-muted mb-2">
-                                    <i class="bi bi-envelope"></i> Email
+                                    <i class="bi bi-envelope"></i> Email <span class="text-danger">*</span>
                                 </label>
                                 <input type="email" 
                                        class="form-control" 
@@ -484,7 +527,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                             
                             <div class="mb-3">
                                 <label for="password" class="form-label text-muted mb-2">
-                                    <i class="bi bi-shield-lock"></i> Contraseña
+                                    <i class="bi bi-shield-lock"></i> Contraseña <span class="text-danger">*</span>
                                 </label>
                                 <input type="password" 
                                        class="form-control" 
@@ -497,7 +540,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                             
                             <div class="mb-4">
                                 <label for="password_confirm" class="form-label text-muted mb-2">
-                                    <i class="bi bi-shield-check"></i> Confirmar Contraseña
+                                    <i class="bi bi-shield-check"></i> Confirmar Contraseña <span class="text-danger">*</span>
                                 </label>
                                 <input type="password" 
                                        class="form-control" 
@@ -510,9 +553,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
                             <div class="d-grid gap-2 mb-4">
                                 <button type="submit" class="btn btn-primary btn-login">
                                     <i class="bi bi-person-plus me-2"></i>
-                                    Crear Cuenta
+                                    Crear Cuenta Gratis
                                 </button>
                             </div>
+                            
+                            <p class="text-center text-muted small">
+                                Al registrarte aceptas nuestros términos y condiciones
+                            </p>
                         </form>
                         
                         <div class="switch-form">

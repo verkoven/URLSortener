@@ -973,13 +973,26 @@ if ($is_logged_in && $user_id > 1) {
             </div>
             <?php endif; ?>
             
-            <?php if (REQUIRE_LOGIN_TO_SHORTEN && !$is_logged_in): ?>
-            <div class="login-required">
-                <h3>🔒 Inicio de sesión requerido</h3>
-                <p>Para crear URLs cortas necesitas iniciar sesión.</p>
-                <p><a href="<?php echo rtrim(BASE_URL, '/'); ?>/admin/login.php">Iniciar Sesión</a> o <a href="<?php echo rtrim(BASE_URL, '/'); ?>/admin/login.php?register=1">Registrarse</a></p>
-            </div>
-            <?php endif; ?>
+<?php if (REQUIRE_LOGIN_TO_SHORTEN && !$is_logged_in): ?>
+<div class="login-required">
+    <h3>🔒 Inicio de sesión requerido</h3>
+    <p>Para crear URLs cortas necesitas una cuenta.</p>
+    <div style="display: flex; gap: 15px; justify-content: center; margin-top: 20px;">
+        <a href="<?php echo rtrim(BASE_URL, '/'); ?>/admin/login.php" 
+           style="background: #667eea; color: white; padding: 12px 30px; border-radius: 25px; text-decoration: none; font-weight: 600;">
+            🔑 Iniciar Sesión
+        </a>
+        <a href="<?php echo rtrim(BASE_URL, '/'); ?>/admin/login.php?register=1" 
+           style="background: #28a745; color: white; padding: 12px 30px; border-radius: 25px; text-decoration: none; font-weight: 600;">
+            ✨ Crear Cuenta Gratis
+        </a>
+    </div>
+    <p style="margin-top: 15px; font-size: 0.9em; color: #666;">
+        ¡Registro gratuito en 30 segundos! Sin tarjeta de crédito.
+    </p>
+</div>
+<?php endif; ?>
+
             
             <?php if (empty($shortened_url)): ?>
             <!-- URL Form -->
