@@ -1,47 +1,59 @@
 <?php
+include_once __DIR__ . '/log.php';
+// api/info.php - Información del usuario
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Credentials: true');
 
-// Obtener el código
-$code = $_GET['code'] ?? '';
+session_start();
+require_once '../conf.php';
 
-if (empty($code)) {
-    http_response_code(400);
-    echo json_encode(['error' => 'No code provided']);
+// Verificar autenticación
+if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Not authenticated']);
     exit;
 }
 
 // Conectar a BD
-require_once '../conf.php';
-
 try {
     $db = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+} catch(PDOException $e) {
+    http_response_code(500);
+    echo json_encode(['error' => 'Database error']);
+    exit;
+}
+
+// Obtener información del usuario
+$user_id = $_SESSION['user_id'] ?? 1;
+
+try {
+    // Estadísticas del usuario
+    $stmt = $db->prepare("
+        SELECT COUNT(*) as total_urls, 
+               COALESCE(SUM(clicks), 0) as total_clicks 
+        FROM urls 
+        WHERE user_id = ?
+    ");
+    $stmt->execute([$user_id]);
+    $stats = $stmt->fetch(PDO::FETCH_ASSOC);
     
-    // Buscar URL
-    $stmt = $db->prepare("SELECT original_url, clicks, created_at FROM urls WHERE short_code = ? AND active = 1");
-    $stmt->execute([$code]);
-    $url = $stmt->fetch();
+    // Responder con información
+    echo json_encode([
+        'user' => [
+            'id' => $user_id,
+            'username' => $_SESSION['username'] ?? 'Usuario',
+            'role' => $_SESSION['role'] ?? 'user'
+        ],
+        'stats' => [
+            'total_urls' => (int)$stats['total_urls'],
+            'total_clicks' => (int)$stats['total_clicks']
+        ]
+    ]);
     
-    if ($url) {
-        $domain = parse_url($url['original_url'], PHP_URL_HOST);
-        $favicon = 'https://www.google.com/s2/favicons?domain=' . $domain;
-        
-        echo json_encode([
-            'success' => true,
-            'code' => $code,
-            'original_url' => $url['original_url'],
-            'title' => $domain,
-            'favicon' => $favicon,
-            'clicks' => $url['clicks'],
-            'created_at' => $url['created_at']
-        ]);
-    } else {
-        http_response_code(404);
-        echo json_encode(['error' => 'URL not found']);
-    }
 } catch (Exception $e) {
     http_response_code(500);
-    echo json_encode(['error' => 'Server error']);
+    echo json_encode(['error' => 'Failed to fetch user info']);
 }
 ?>
