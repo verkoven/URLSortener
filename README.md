@@ -179,3 +179,11 @@ CREATE TABLE IF NOT EXISTS `users` (
   UNIQUE KEY `username` (`username`),
   UNIQUE KEY `email` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+ALTER TABLE urls 
+ADD COLUMN IF NOT EXISTS active TINYINT(1) DEFAULT 1,
+ADD COLUMN IF NOT EXISTS is_public TINYINT(1) DEFAULT 0,
+ADD INDEX IF NOT EXISTS idx_active (active),
+ADD INDEX IF NOT EXISTS idx_public (is_public);
+
+-- Actualizar URLs existentes
+UPDATE urls SET active = 1 WHERE active IS NULL;
