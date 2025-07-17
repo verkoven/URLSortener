@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: localhost
--- Tiempo de generación: 17-07-2025 a las 11:20:30
+-- Tiempo de generación: 17-07-2025 a las 16:55:15
 -- Versión del servidor: 8.0.42-0ubuntu0.22.04.1
 -- Versión de PHP: 8.4.10
 
@@ -579,7 +579,16 @@ INSERT INTO `click_stats` (`id`, `url_id`, `user_id`, `session_id`, `clicked_at`
 (446, 82, NULL, NULL, '2025-07-17 07:42:01', '20.171.207.132', 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
 (447, 86, NULL, NULL, '2025-07-17 07:42:05', '20.171.207.236', 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
 (448, 41, NULL, NULL, '2025-07-17 10:45:41', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-(449, 61, NULL, NULL, '2025-07-17 11:00:23', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', 'https://0ln.eu/terms/', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+(449, 61, NULL, NULL, '2025-07-17 11:00:23', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', 'https://0ln.eu/terms/', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(450, 87, NULL, NULL, '2025-07-17 11:28:24', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(451, 87, NULL, NULL, '2025-07-17 11:31:35', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(452, 87, NULL, NULL, '2025-07-17 11:31:42', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(453, 86, NULL, NULL, '2025-07-17 11:53:01', '54.198.55.229', 'Mozilla/5.0 (compatible)', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(454, 83, NULL, NULL, '2025-07-17 15:42:15', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(455, 83, NULL, NULL, '2025-07-17 15:46:05', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(456, 79, NULL, NULL, '2025-07-17 15:51:06', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(457, 87, NULL, NULL, '2025-07-17 16:12:40', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(458, 87, NULL, NULL, '2025-07-17 16:21:10', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -819,11 +828,11 @@ INSERT INTO `urls` (`id`, `user_id`, `domain_id`, `short_code`, `original_url`, 
 (66, 1, 14, 'Va6G9N', 'https://adunti.net', '2025-07-13 16:46:54', 8, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (67, 1, 16, 'b82sAz', 'https://hola.es', '2025-07-13 20:10:00', 0, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (68, 1, 0, '3CdrZH', 'https://x.com/ROSAMARI_5/status/1944496601868943834', '2025-07-13 20:45:32', 13, NULL, NULL, NULL, 1, 1, NULL, NULL),
-(79, 1, 14, 'dgjC0o', 'https://www.elespanol.com/espana/politica/20250714/gobierno-acuerda-illa-cataluna-recaude-irpf-junts-amenaza-tumbarlo-congreso/1003743846793_0.html', '2025-07-14 21:09:00', 13, NULL, NULL, NULL, 1, 1, NULL, NULL),
+(79, 1, 14, 'dgjC0o', 'https://www.elespanol.com/espana/politica/20250714/gobierno-acuerda-illa-cataluna-recaude-irpf-junts-amenaza-tumbarlo-congreso/1003743846793_0.html', '2025-07-14 21:09:00', 14, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (82, 11, 14, 'gVXjHh', 'https://hola.es', '2025-07-16 10:46:11', 3, NULL, NULL, NULL, 1, 1, NULL, NULL),
-(83, 1, NULL, 'dX5KCK', 'https://example.com', '2025-07-16 11:57:59', 2, NULL, NULL, NULL, 1, 1, NULL, NULL),
-(86, 12, 0, 'BSvg1L', 'https://proton.me', '2025-07-16 12:57:00', 2, NULL, NULL, NULL, 1, 1, NULL, NULL),
-(87, 12, 14, 'icm2g1', 'https://proton.me', '2025-07-16 13:46:30', 2, NULL, NULL, NULL, 1, 1, NULL, NULL);
+(83, 1, NULL, 'dX5KCK', 'https://example.com', '2025-07-16 11:57:59', 4, NULL, NULL, NULL, 1, 1, NULL, NULL),
+(86, 12, 0, 'BSvg1L', 'https://proton.me', '2025-07-16 12:57:00', 3, NULL, NULL, NULL, 1, 1, NULL, NULL),
+(87, 12, 14, 'icm2g1', 'https://proton.me', '2025-07-16 13:46:30', 7, NULL, NULL, NULL, 1, 1, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -953,6 +962,64 @@ CREATE TABLE `user_stats` (
 ,`registrations_today` bigint
 ,`total_users` bigint
 );
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `user_urls`
+--
+
+CREATE TABLE `user_urls` (
+  `id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `url_id` int NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `category` varchar(50) DEFAULT NULL,
+  `favicon` varchar(255) DEFAULT NULL,
+  `notes` text,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+--
+-- Volcado de datos para la tabla `user_urls`
+--
+
+INSERT INTO `user_urls` (`id`, `user_id`, `url_id`, `title`, `category`, `favicon`, `notes`, `created_at`, `updated_at`) VALUES
+(2, 1, 83, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=example.com', NULL, '2025-07-16 11:57:59', '2025-07-17 14:20:14'),
+(3, 1, 79, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=www.elespanol.com', NULL, '2025-07-14 21:09:00', '2025-07-17 14:20:14'),
+(4, 1, 68, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=x.com', NULL, '2025-07-13 20:45:32', '2025-07-17 14:20:14'),
+(5, 1, 67, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=hola.es', NULL, '2025-07-13 20:10:00', '2025-07-17 14:20:14'),
+(6, 1, 66, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.net', NULL, '2025-07-13 16:46:54', '2025-07-17 14:20:14'),
+(7, 1, 65, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.net', NULL, '2025-07-13 16:43:57', '2025-07-17 14:20:14'),
+(8, 1, 64, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=0ln.eu', NULL, '2025-07-13 15:31:29', '2025-07-17 14:20:14'),
+(9, 1, 61, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=mega.nz', NULL, '2025-07-13 14:13:12', '2025-07-17 14:20:14'),
+(10, 1, 60, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.org', NULL, '2025-07-13 12:47:55', '2025-07-17 14:20:14'),
+(11, 1, 59, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.net', NULL, '2025-07-13 12:42:57', '2025-07-17 14:20:14'),
+(12, 1, 58, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.net', NULL, '2025-07-13 12:32:02', '2025-07-17 14:20:14'),
+(13, 1, 57, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.net', NULL, '2025-07-13 11:39:43', '2025-07-17 14:20:14'),
+(14, 1, 56, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.net', NULL, '2025-07-13 11:39:16', '2025-07-17 14:20:14'),
+(15, 1, 55, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.net', NULL, '2025-07-13 09:57:09', '2025-07-17 14:20:14'),
+(16, 1, 54, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.net', NULL, '2025-07-13 09:56:47', '2025-07-17 14:20:14'),
+(17, 1, 53, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.net', NULL, '2025-07-13 09:36:36', '2025-07-17 14:20:14'),
+(18, 1, 52, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.net', NULL, '2025-07-13 09:11:06', '2025-07-17 14:20:14'),
+(19, 1, 51, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=amzn.to', NULL, '2025-07-13 09:10:01', '2025-07-17 14:20:14'),
+(20, 1, 50, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=amzn.to', NULL, '2025-07-13 08:59:22', '2025-07-17 14:20:14'),
+(21, 1, 49, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=amzn.to', NULL, '2025-07-13 08:58:45', '2025-07-17 14:20:14'),
+(22, 1, 48, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=amzn.to', NULL, '2025-07-13 08:50:27', '2025-07-17 14:20:14'),
+(23, 1, 47, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.org', NULL, '2025-07-13 08:34:25', '2025-07-17 14:20:14'),
+(24, 1, 46, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.net', NULL, '2025-07-13 08:21:39', '2025-07-17 14:20:14'),
+(25, 1, 45, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=hola.es', NULL, '2025-07-13 07:03:52', '2025-07-17 14:20:14'),
+(26, 1, 44, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=hola.es', NULL, '2025-07-13 03:39:37', '2025-07-17 14:20:14'),
+(27, 1, 43, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=www.google.fr', NULL, '2025-07-12 22:05:46', '2025-07-17 14:20:14'),
+(28, 1, 37, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=www.elespanol.com', NULL, '2025-07-12 12:34:22', '2025-07-17 14:20:14'),
+(29, 1, 36, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=amazon.com', NULL, '2025-07-11 20:56:14', '2025-07-17 14:20:14'),
+(30, 1, 35, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.net', NULL, '2025-07-11 19:28:02', '2025-07-17 14:20:14'),
+(31, 1, 34, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.org', NULL, '2025-07-11 19:03:20', '2025-07-17 14:20:14'),
+(32, 1, 30, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=adunti.net', NULL, '2025-07-11 15:35:36', '2025-07-17 14:20:14'),
+(33, 1, 29, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=www.elespanol.com', NULL, '2025-07-11 15:18:14', '2025-07-17 14:20:14'),
+(36, 12, 87, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=proton.me', NULL, '2025-07-16 13:46:30', '2025-07-17 16:32:17'),
+(37, 12, 86, 'Sincronizado', NULL, 'https://www.google.com/s2/favicons?domain=proton.me', NULL, '2025-07-16 12:57:00', '2025-07-17 16:32:17');
 
 -- --------------------------------------------------------
 
@@ -1124,6 +1191,19 @@ ALTER TABLE `user_sessions`
   ADD KEY `idx_user_sessions_user_active` (`user_id`,`is_active`);
 
 --
+-- Indices de la tabla `user_urls`
+--
+ALTER TABLE `user_urls`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `user_url` (`user_id`,`url_id`),
+  ADD KEY `user_id` (`user_id`),
+  ADD KEY `url_id` (`url_id`),
+  ADD KEY `category` (`category`),
+  ADD KEY `idx_user_created` (`user_id`,`created_at`),
+  ADD KEY `idx_user_category` (`user_id`,`category`),
+  ADD KEY `idx_user_url` (`user_id`,`url_id`);
+
+--
 -- AUTO_INCREMENT de las tablas volcadas
 --
 
@@ -1149,7 +1229,7 @@ ALTER TABLE `api_tokens`
 -- AUTO_INCREMENT de la tabla `click_stats`
 --
 ALTER TABLE `click_stats`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=450;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=459;
 
 --
 -- AUTO_INCREMENT de la tabla `config`
@@ -1210,6 +1290,12 @@ ALTER TABLE `user_audit_log`
 --
 ALTER TABLE `user_sessions`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT de la tabla `user_urls`
+--
+ALTER TABLE `user_urls`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=38;
 
 --
 -- Restricciones para tablas volcadas
