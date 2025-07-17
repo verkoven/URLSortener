@@ -29,18 +29,47 @@ $user_id = $_SESSION['user_id'] ?? 1;
 $username = $_SESSION['username'] ?? 'Usuario';
 $user_role = $_SESSION['role'] ?? 'user';
 $is_admin = ($user_role === 'admin');
-
 // VERIFICACIÓN ESTRICTA: Solo el usuario con ID 1 es superadmin
 $is_superadmin = false;
 if ($user_id == 1) {
     $is_superadmin = true;
 }
-
 // Verificar acceso a dominios - SOLO SUPERADMIN
 if ($section == 'domains' && !$is_superadmin) {
     $message = "⛔ Acceso denegado. Solo el superadministrador puede gestionar dominios.";
     $messageType = 'danger';
     $section = 'dashboard'; // Redirigir al dashboard
+}
+
+// NUEVA FUNCIONALIDAD: Procesar regeneración de token API
+if (isset($_GET['action']) && $_GET['action'] === 'regenerate_token') {
+    try {
+        // Desactivar token anterior
+        $stmt = $db->prepare("UPDATE api_tokens SET is_active = 0 WHERE user_id = ?");
+        $stmt->execute([$user_id]);
+        
+        // Generar nuevo token
+        $newToken = bin2hex(random_bytes(32));
+        $stmt = $db->prepare("INSERT INTO api_tokens (user_id, token) VALUES (?, ?)");
+        $stmt->execute([$user_id, $newToken]);
+        
+        $message = "✅ Token API regenerado correctamente";
+        $messageType = 'success';
+        logActivity($db, $user_id, 'regenerate_token', "Regeneró su token API");
+        
+        // Redirigir para limpiar la URL
+        header('Location: panel_simple.php?msg=token_regenerated');
+        exit;
+    } catch (Exception $e) {
+        $message = "❌ Error al regenerar token: " . $e->getMessage();
+        $messageType = 'danger';
+    }
+}
+
+// Mostrar mensaje si viene de regeneración
+if (isset($_GET['msg']) && $_GET['msg'] == 'token_regenerated') {
+    $message = "✅ Token API regenerado correctamente";
+    $messageType = 'success';
 }
 
 // Función para registrar actividades
@@ -772,6 +801,85 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
             gap: 15px;
         }
         
+        /* Token API section */
+        .token-section {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.05);
+            border: 2px solid #e3f2fd;
+        }
+        
+        .token-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .token-header h3 {
+            color: #2c3e50;
+            margin: 0;
+        }
+        
+        .token-box {
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .token-display {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            word-break: break-all;
+            color: #495057;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            margin-bottom: 15px;
+        }
+        
+        .token-actions {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .token-info {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .token-info h4 {
+            color: #1565c0;
+            margin-bottom: 15px;
+        }
+        
+        .token-info ol {
+            margin-left: 20px;
+            color: #495057;
+            line-height: 1.8;
+        }
+        
+        .token-warning {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
         /* Mapa */
         #geo-map {
             height: 500px;
@@ -844,6 +952,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
             
             .dashboard-header h1 {
                 font-size: 1.5em;
+            }
+            
+            .token-actions {
+                flex-direction: column;
+            }
+            
+            .token-actions .btn {
+                width: 100%;
             }
         }
         
@@ -1038,6 +1154,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                 <a href="?section=urls" class="nav-item <?php echo $section === 'urls' ? 'active' : ''; ?>">
                     <span class="nav-icon">🔗</span> <?php echo $is_admin ? 'Gestión URLs' : 'Mis URLs'; ?>
                 </a>
+                <a href="?section=token" class="nav-item <?php echo $section === 'token' ? 'active' : ''; ?>">
+                    <span class="nav-icon">🔑</span> Token API
+                </a>
                 <a href="?section=stats" class="nav-item <?php echo $section === 'stats' ? 'active' : ''; ?>">
                     <span class="nav-icon">📈</span> Estadísticas
                 </a>
@@ -1080,6 +1199,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                     switch($section) {
                         case 'dashboard': echo '📊 Dashboard'; break;
                         case 'urls': echo '🔗 ' . ($is_admin ? 'Gestión de URLs' : 'Mis URLs'); break;
+                        case 'token': echo '🔑 Token API'; break;
                         case 'stats': echo '📈 Estadísticas'; break;
                         case 'geo': echo '🌍 Geolocalización'; break;
                         case 'domains': echo '🌐 Gestión de Dominios'; break;
@@ -1212,11 +1332,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                         <a href="?section=urls" class="btn btn-primary">
                             🔗 Ver URLs
                         </a>
+                        <a href="?section=token" class="btn btn-warning">
+                            🔑 Mi Token API
+                        </a>
                         <a href="?section=stats" class="btn btn-info">
                             📊 Estadísticas
                         </a>
                         <?php if ($is_admin): ?>
-                        <a href="usuarios.php" class="btn btn-warning">
+                        <a href="usuarios.php" class="btn btn-secondary">
                             👥 Usuarios
                         </a>
                         <?php endif; ?>
@@ -1314,6 +1437,159 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                     </div>
                     <?php endif; ?>
                 </div>
+                
+            <!-- Token API -->
+            <?php elseif ($section === 'token'): ?>
+                <?php
+                // Verificar si el usuario tiene token
+                $stmt = $db->prepare("SELECT token, created_at, last_used FROM api_tokens WHERE user_id = ? AND is_active = 1");
+                $stmt->execute([$user_id]);
+                $tokenData = $stmt->fetch();
+                
+                if (!$tokenData) {
+                    // Generar nuevo token
+                    $token = bin2hex(random_bytes(32));
+                    $stmt = $db->prepare("INSERT INTO api_tokens (user_id, token) VALUES (?, ?)");
+                    $stmt->execute([$user_id, $token]);
+                    $tokenData = ['token' => $token, 'created_at' => date('Y-m-d H:i:s'), 'last_used' => null];
+                }
+                ?>
+                
+                <div class="token-section">
+                    <div class="token-header">
+                        <h3>🔑 Token API para Extensión Chrome</h3>
+                        <span class="badge badge-info">Personal e intransferible</span>
+                    </div>
+                    
+                    <div class="token-box">
+                        <div class="form-label">Tu Token API actual:</div>
+                        <div class="token-display" id="tokenDisplay">
+                            <?php echo htmlspecialchars($tokenData['token']); ?>
+                        </div>
+                        
+                        <div class="token-actions">
+                            <button class="btn btn-primary" onclick="copyToken()">
+                                <span id="copyIcon">📋</span> Copiar Token
+                            </button>
+                            <button class="btn btn-warning" onclick="confirmRegenerate()">
+                                🔄 Regenerar Token
+                            </button>
+                        </div>
+                        
+                        <div style="margin-top: 15px;">
+                            <small class="text-muted">
+                                <strong>Creado:</strong> <?php echo date('d/m/Y H:i', strtotime($tokenData['created_at'])); ?><br>
+                                <strong>Último uso:</strong> <?php echo $tokenData['last_used'] ? date('d/m/Y H:i', strtotime($tokenData['last_used'])) : 'Nunca'; ?>
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="token-info">
+                        <h4>📋 ¿Cómo usar este token?</h4>
+                        <ol>
+                            <li>Instala la extensión "<strong>Gestor de URLs Cortas</strong>" desde Chrome Web Store</li>
+                            <li>Haz clic en el icono de la extensión en tu navegador</li>
+                            <li>Pulsa el botón "📥 <strong>Importar de 0ln.eu</strong>"</li>
+                            <li>Cuando te pida el token, pega el que has copiado arriba</li>
+                            <li>¡Listo! La extensión importará automáticamente todas tus URLs</li>
+                        </ol>
+                        
+                        <div class="token-warning">
+                            <span style="font-size: 1.2em;">⚠️</span>
+                            <div>
+                                <strong>Importante:</strong> Este token es como una contraseña. No lo compartas con nadie. 
+                                Si crees que alguien más lo tiene, regenera uno nuevo inmediatamente.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="data-table" style="margin-top: 30px;">
+                        <h3>🔌 Información de la API</h3>
+                        <table>
+                            <tr>
+                                <td><strong>Endpoint API:</strong></td>
+                                <td><code>https://<?php echo $_SERVER['HTTP_HOST']; ?>/api/my-urls.php</code></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Método:</strong></td>
+                                <td><code>GET</code></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Header requerido:</strong></td>
+                                <td><code>Authorization: Bearer TU_TOKEN</code></td>
+                            </tr>
+                            <tr>
+                                <td><strong>Respuesta:</strong></td>
+                                <td><code>JSON</code> con tus URLs</td>
+                            </tr>
+                            <tr>
+                                <td><strong>Límite:</strong></td>
+                                <td>1000 URLs máximo por petición</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+                
+                <script>
+                function copyToken() {
+                    const tokenText = document.getElementById('tokenDisplay').textContent.trim();
+                    
+                    // Intentar usar la API moderna
+                    if (navigator.clipboard && window.isSecureContext) {
+                        navigator.clipboard.writeText(tokenText).then(function() {
+                            showCopySuccess();
+                        }).catch(function() {
+                            fallbackCopy(tokenText);
+                        });
+                    } else {
+                        fallbackCopy(tokenText);
+                    }
+                }
+                
+                function fallbackCopy(text) {
+                    const textArea = document.createElement('textarea');
+                    textArea.value = text;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    
+                    try {
+                        document.execCommand('copy');
+                        showCopySuccess();
+                    } catch (err) {
+                        alert('Error al copiar. Por favor, selecciona y copia manualmente.');
+                    } finally {
+                        document.body.removeChild(textArea);
+                    }
+                }
+                
+                function showCopySuccess() {
+                    const copyIcon = document.getElementById('copyIcon');
+                    copyIcon.textContent = '✅';
+                    
+                    // Mostrar alerta temporal
+                    const alert = document.createElement('div');
+                    alert.className = 'alert alert-success';
+                    alert.style.position = 'fixed';
+                    alert.style.top = '20px';
+                    alert.style.right = '20px';
+                    alert.style.zIndex = '9999';
+                    alert.innerHTML = '✅ Token copiado al portapapeles';
+                    document.body.appendChild(alert);
+                    
+                    setTimeout(() => {
+                        copyIcon.textContent = '📋';
+                        alert.remove();
+                    }, 2000);
+                }
+                
+                function confirmRegenerate() {
+                    if (confirm('⚠️ ¿Estás seguro?\n\nAl regenerar el token:\n• El token actual dejará de funcionar inmediatamente\n• Tendrás que actualizar el token en la extensión\n• No podrás recuperar el token anterior\n\n¿Continuar?')) {
+                        window.location.href = '?action=regenerate_token';
+                    }
+                }
+                </script>
             
             <!-- Gestión de URLs -->
             <?php elseif ($section === 'urls'): ?>
