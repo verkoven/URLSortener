@@ -3,43 +3,95 @@ session_start();
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Credentials: true');
-
-// VERIFICACIÓN OBLIGATORIA DE AUTENTICACIÓN
-if (!isset($_SESSION['user_id']) || empty($_SESSION['user_id'])) {
-    http_response_code(401);
-    echo json_encode([
-        'error' => 'AUTHENTICATION_REQUIRED',
-        'message' => 'User must be logged in to access URLs',
-        'authenticated' => false,
-        'data' => []
-    ]);
-    exit;
-}
-
-$user_id = $_SESSION['user_id'];
-
-// Log de acceso (opcional, para debugging)
-$access_log = [
-    'timestamp' => date('Y-m-d H:i:s'),
-    'file' => 'my-urls.php',
-    'user_id' => $user_id,
-    'method' => $_SERVER['REQUEST_METHOD'],
-    'authenticated' => true
-];
-file_put_contents('my_urls_access.log', json_encode($access_log) . "\n", FILE_APPEND);
+header('Access-Control-Allow-Headers: Content-Type, Authorization, X-API-Token');
 
 require_once '../conf.php';
+
+// Función de autenticación combinada (sesión + token)
+function authenticateUser($db) {
+    // 1. Verificar sesión PHP
+    if (isset($_SESSION['user_id']) && !empty($_SESSION['user_id'])) {
+        return [
+            'authenticated' => true,
+            'user_id' => $_SESSION['user_id'],
+            'method' => 'session'
+        ];
+    }
+    
+    // 2. Verificar token en headers
+    $headers = getallheaders();
+    $token = null;
+    
+    // Authorization: Bearer TOKEN
+    if (isset($headers['Authorization'])) {
+        if (preg_match('/Bearer\s+(.*)$/i', $headers['Authorization'], $matches)) {
+            $token = $matches[1];
+        }
+    }
+    
+    // X-API-Token: TOKEN
+    if (!$token && isset($headers['X-API-Token'])) {
+        $token = $headers['X-API-Token'];
+    }
+    
+    // Token en query string (menos seguro)
+    if (!$token && isset($_GET['api_token'])) {
+        $token = $_GET['api_token'];
+    }
+    
+    if ($token) {
+        try {
+            $stmt = $db->prepare("
+                SELECT user_id FROM api_tokens 
+                WHERE token = ? AND is_active = 1
+                AND (expires_at IS NULL OR expires_at > NOW())
+            ");
+            $stmt->execute([$token]);
+            $tokenData = $stmt->fetch();
+            
+            if ($tokenData) {
+                // Actualizar último uso
+                $updateStmt = $db->prepare("UPDATE api_tokens SET last_used = NOW() WHERE token = ?");
+                $updateStmt->execute([$token]);
+                
+                return [
+                    'authenticated' => true,
+                    'user_id' => $tokenData['user_id'],
+                    'method' => 'token'
+                ];
+            }
+        } catch (Exception $e) {
+            // Log error si necesario
+        }
+    }
+    
+    return ['authenticated' => false];
+}
 
 try {
     $db = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME, DB_USER, DB_PASS);
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
+    // Autenticar usuario
+    $auth = authenticateUser($db);
+    
+    if (!$auth['authenticated']) {
+        http_response_code(401);
+        echo json_encode([
+            'error' => 'AUTHENTICATION_REQUIRED',
+            'message' => 'User must be logged in to access URLs',
+            'authenticated' => false,
+            'data' => []
+        ]);
+        exit;
+    }
+    
+    $user_id = $auth['user_id'];
+    
     // Verificar que el usuario existe y está activo
     $stmt = $db->prepare("SELECT id FROM users WHERE id = ? AND status = 'active'");
     $stmt->execute([$user_id]);
     if (!$stmt->fetch()) {
-        // Usuario no existe o está inactivo
-        session_destroy();
         http_response_code(401);
         echo json_encode([
             'error' => 'USER_INVALID',
@@ -50,7 +102,7 @@ try {
         exit;
     }
     
-    // SOLO obtener URLs del usuario autenticado
+    // Obtener URLs del usuario
     $stmt = $db->prepare("
         SELECT u.short_code, u.original_url, u.clicks, u.created_at, cd.domain
         FROM urls u
@@ -82,6 +134,7 @@ try {
         'file' => 'my-urls.php',
         'user_id' => $user_id,
         'urls_returned' => count($formatted),
+        'auth_method' => $auth['method'],
         'success' => true
     ];
     file_put_contents('my_urls_success.log', json_encode($success_log) . "\n", FILE_APPEND);
@@ -93,7 +146,6 @@ try {
     $error_log = [
         'timestamp' => date('Y-m-d H:i:s'),
         'file' => 'my-urls.php',
-        'user_id' => $user_id,
         'error' => $e->getMessage(),
         'success' => false
     ];
