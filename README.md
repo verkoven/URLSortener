@@ -187,3 +187,18 @@ ADD INDEX IF NOT EXISTS idx_public (is_public);
 
 -- Actualizar URLs existentes
 UPDATE urls SET active = 1 WHERE active IS NULL;
+CREATE TABLE api_tokens (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    token VARCHAR(64) UNIQUE NOT NULL,
+    name VARCHAR(100) DEFAULT 'API Token',
+    permissions TEXT,
+    last_used DATETIME DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME DEFAULT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    INDEX idx_token (token),
+    INDEX idx_user (user_id),
+    INDEX idx_active (is_active)
+);
