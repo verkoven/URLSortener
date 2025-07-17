@@ -202,3 +202,192 @@ CREATE TABLE api_tokens (
     INDEX idx_user (user_id),
     INDEX idx_active (is_active)
 );
+Opcional para el gestor de marcadores de navegadores
+-- =====================================================
+-- GESTOR DE URLs CORTAS - ESTRUCTURA DE BASE DE DATOS
+-- =====================================================
+-- Autor: Claude & Chino
+-- Fecha: 17 Enero 2025
+-- Descripción: Estructura completa para gestor personalizado de URLs
+-- =====================================================
+
+-- -----------------------------------------------------
+-- 1. TABLA PRINCIPAL DEL GESTOR
+-- -----------------------------------------------------
+CREATE TABLE `user_urls` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `url_id` int(11) NOT NULL,
+  `title` varchar(255) DEFAULT NULL,
+  `category` varchar(100) DEFAULT NULL,
+  `favicon` text DEFAULT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_user_url` (`user_id`, `url_id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_url_id` (`url_id`),
+  KEY `idx_category` (`category`),
+  CONSTRAINT `fk_user_urls_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_user_urls_url` FOREIGN KEY (`url_id`) REFERENCES `urls` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------
+-- 2. ACTUALIZAR TABLA URLS (solo si es necesario)
+-- -----------------------------------------------------
+-- Agregar campo title si no existe
+ALTER TABLE `urls` 
+ADD COLUMN `title` varchar(255) DEFAULT NULL AFTER `original_url`;
+
+-- Agregar campo active si no existe  
+ALTER TABLE `urls` 
+ADD COLUMN `active` tinyint(1) DEFAULT 1 AFTER `title`;
+
+-- Agregar índices para optimización
+ALTER TABLE `urls` 
+ADD INDEX `idx_user_active` (`user_id`, `active`),
+ADD INDEX `idx_short_code` (`short_code`);
+
+-- -----------------------------------------------------
+-- 3. TABLA API TOKENS (opcional)
+-- -----------------------------------------------------
+CREATE TABLE `api_tokens` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `token` varchar(64) NOT NULL,
+  `name` varchar(100) DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT 1,
+  `expires_at` timestamp NULL DEFAULT NULL,
+  `last_used` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_token` (`token`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_active` (`is_active`),
+  CONSTRAINT `fk_api_tokens_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------
+-- 4. ACTUALIZAR TÍTULOS VACÍOS CON FORMATO MEJORADO
+-- -----------------------------------------------------
+UPDATE `urls` 
+SET `title` = CONCAT(
+    UPPER(LEFT(REPLACE(SUBSTRING_INDEX(SUBSTRING_INDEX(original_url, '://', -1), '/', 1), 'www.', ''), 1)),
+    LOWER(SUBSTRING(REPLACE(SUBSTRING_INDEX(SUBSTRING_INDEX(original_url, '://', -1), '/', 1), 'www.', ''), 2)),
+    ' - ', 
+    short_code,
+    ' → ',
+    original_url
+)
+WHERE (title IS NULL OR title = '') 
+AND active = 1;
+
+-- -----------------------------------------------------
+-- 5. SINCRONIZAR URLs AL GESTOR (ejemplo para user_id = 12)
+-- -----------------------------------------------------
+INSERT INTO `user_urls` (`user_id`, `url_id`, `title`, `category`, `favicon`, `notes`, `created_at`) 
+SELECT 
+    12, 
+    u.id, 
+    CONCAT(
+        UPPER(LEFT(REPLACE(SUBSTRING_INDEX(SUBSTRING_INDEX(u.original_url, '://', -1), '/', 1), 'www.', ''), 1)),
+        LOWER(SUBSTRING(REPLACE(SUBSTRING_INDEX(SUBSTRING_INDEX(u.original_url, '://', -1), '/', 1), 'www.', ''), 2)),
+        ' - ', 
+        u.short_code,
+        ' → ',
+        u.original_url
+    ) as title,
+    'personal' as category,
+    CONCAT('https://www.google.com/s2/favicons?domain=', SUBSTRING_INDEX(SUBSTRING_INDEX(u.original_url, '://', -1), '/', 1)) as favicon,
+    'Importado automáticamente' as notes,
+    u.created_at
+FROM `urls` u 
+WHERE u.user_id = 12 
+AND u.active = 1 
+AND NOT EXISTS (
+    SELECT 1 FROM user_urls uu WHERE uu.user_id = 12 AND uu.url_id = u.id
+);
+
+-- -----------------------------------------------------
+-- 6. CONSULTAS DE VERIFICACIÓN
+-- -----------------------------------------------------
+-- Verificar estructura de user_urls
+DESCRIBE `user_urls`;
+
+-- Verificar URLs del usuario en el gestor
+SELECT 
+    uu.id,
+    uu.title,
+    uu.category,
+    u.short_code,
+    u.original_url,
+    uu.created_at
+FROM `user_urls` uu
+JOIN `urls` u ON uu.url_id = u.id
+WHERE uu.user_id = 12
+ORDER BY uu.created_at DESC;
+
+-- Verificar estadísticas del gestor
+SELECT 
+    'En gestor' as tipo,
+    COUNT(*) as total
+FROM `user_urls` 
+WHERE user_id = 12
+
+UNION ALL
+
+SELECT 
+    'En sistema' as tipo,
+    COUNT(*) as total
+FROM `urls` 
+WHERE user_id = 12 AND active = 1;
+
+-- Verificar dominios más usados
+SELECT 
+    cd.domain,
+    COUNT(*) as count
+FROM `urls` u
+LEFT JOIN `custom_domains` cd ON u.domain_id = cd.id
+WHERE u.user_id = 12 AND u.active = 1
+GROUP BY u.domain_id, cd.domain
+ORDER BY count DESC;
+
+-- -----------------------------------------------------
+-- 7. CONSULTAS DE LIMPIEZA (usar con precaución)
+-- -----------------------------------------------------
+-- Limpiar gestor de un usuario específico
+-- DELETE FROM `user_urls` WHERE `user_id` = 12;
+
+-- Limpiar URLs inactivas
+-- DELETE FROM `urls` WHERE `active` = 0;
+
+-- -----------------------------------------------------
+-- 8. CONSULTAS DE MANTENIMIENTO
+-- -----------------------------------------------------
+-- Optimizar tablas
+OPTIMIZE TABLE `user_urls`;
+OPTIMIZE TABLE `urls`;
+OPTIMIZE TABLE `custom_domains`;
+
+-- Verificar integridad de foreign keys
+SELECT 
+    uu.id,
+    uu.user_id,
+    uu.url_id,
+    u.id as url_exists,
+    us.id as user_exists
+FROM `user_urls` uu
+LEFT JOIN `urls` u ON uu.url_id = u.id
+LEFT JOIN `users` us ON uu.user_id = us.id
+WHERE u.id IS NULL OR us.id IS NULL;
+
+-- =====================================================
+-- NOTAS DE IMPLEMENTACIÓN:
+-- =====================================================
+-- 1. Ejecutar CREATE TABLE user_urls primero
+-- 2. Solo ejecutar ALTER TABLE si los campos no existen
+-- 3. Cambiar user_id = 12 por el ID del usuario real
+-- 4. Las consultas de limpieza están comentadas por seguridad
+-- 5. Verificar foreign keys antes de ejecutar
+-- =====================================================
