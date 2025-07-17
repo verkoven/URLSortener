@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: localhost
--- Tiempo de generación: 14-07-2025 a las 18:48:18
+-- Tiempo de generación: 17-07-2025 a las 11:20:30
 -- Versión del servidor: 8.0.42-0ubuntu0.22.04.1
 -- Versión de PHP: 8.4.10
 
@@ -124,6 +124,34 @@ CREATE TABLE `api_keys` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `revoked_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `api_tokens`
+--
+
+CREATE TABLE `api_tokens` (
+  `id` int NOT NULL,
+  `user_id` int NOT NULL,
+  `token` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT 'API Token',
+  `permissions` text COLLATE utf8mb4_unicode_ci,
+  `last_used` datetime DEFAULT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `expires_at` datetime DEFAULT NULL,
+  `is_active` tinyint(1) DEFAULT '1'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `api_tokens`
+--
+
+INSERT INTO `api_tokens` (`id`, `user_id`, `token`, `name`, `permissions`, `last_used`, `created_at`, `expires_at`, `is_active`) VALUES
+(5, 12, '7367c5ca87ed0e0af14d7f11cd7ae1953c50f3712df6d96f1e19c9fd7923e65e', 'Extension Chrome', 'read', NULL, '2025-07-17 10:15:22', NULL, 1),
+(6, 12, 'ff996a3ed7a793de69ef7701776fdbaef0ebf502832fee71ab186321dd008c46', 'Extension chrome', 'read', NULL, '2025-07-17 10:41:26', NULL, 1),
+(7, 13, 'e1c4dc39f3be84ce975eb9d91bd52e252dac1a829fbcbd91fafd7c0211fa58c9', 'API Token', NULL, NULL, '2025-07-17 10:45:08', NULL, 1),
+(8, 1, '7744acde093889f2ad9066868227ecfc846b2a0295873d05d2a8666326422b77', 'API Token', NULL, NULL, '2025-07-17 10:57:46', NULL, 1);
 
 -- --------------------------------------------------------
 
@@ -523,8 +551,35 @@ INSERT INTO `click_stats` (`id`, `url_id`, `user_id`, `session_id`, `clicked_at`
 (408, 68, NULL, NULL, '2025-07-14 11:03:50', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', 'https://t.co/fhDm1r0En0', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
 (409, 66, NULL, NULL, '2025-07-14 12:37:14', '171.236.47.163', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Vivaldi/5.3.2679.68', 'http://0ln.org', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
 (410, 66, NULL, NULL, '2025-07-14 12:46:12', '5.196.160.191', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Vivaldi/5.3.2679.68', 'http://0ln.org', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-(418, 78, NULL, NULL, '2025-07-14 18:44:20', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', 'https://0ln.eu/', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
-(419, 78, NULL, NULL, '2025-07-14 18:45:36', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', 'https://0ln.eu/', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+(420, 79, NULL, NULL, '2025-07-14 21:09:33', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(421, 79, NULL, NULL, '2025-07-14 21:22:24', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', 'https://0ln.eu/', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(422, 79, NULL, NULL, '2025-07-14 21:22:24', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', 'https://0ln.eu/', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(423, 79, NULL, NULL, '2025-07-14 21:52:45', '43.165.65.75', 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(424, 79, NULL, NULL, '2025-07-15 13:56:57', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(425, 66, NULL, NULL, '2025-07-15 14:01:30', '84.32.41.136', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 YaBrowser/22.7.0 Yowser/2.5 Safari/537.36', 'http://0ln.org', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(426, 79, NULL, NULL, '2025-07-15 14:01:32', '84.32.41.136', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 YaBrowser/22.7.0 Yowser/2.5 Safari/537.36', 'http://0ln.org', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(427, 79, NULL, NULL, '2025-07-15 14:30:39', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(428, 79, NULL, NULL, '2025-07-15 14:31:23', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(429, 79, NULL, NULL, '2025-07-15 14:47:08', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(430, 79, NULL, NULL, '2025-07-15 14:47:24', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(431, 79, NULL, NULL, '2025-07-15 15:44:56', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(432, 29, NULL, NULL, '2025-07-15 21:49:31', '54.36.232.187', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(433, 66, NULL, NULL, '2025-07-16 01:47:10', '84.32.41.136', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36', 'http://0ln.org', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(434, 79, NULL, NULL, '2025-07-16 01:47:12', '84.32.41.136', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36', 'http://0ln.org', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(436, 29, NULL, NULL, '2025-07-16 06:20:32', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(437, 68, NULL, NULL, '2025-07-16 06:59:36', '152.53.100.131', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 OPR/118.0.0.0', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(438, 82, NULL, NULL, '2025-07-16 12:05:56', '43.135.145.77', 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(439, 83, NULL, NULL, '2025-07-16 12:27:50', '43.166.224.244', 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1', 'http://0ln.eu/dX5KCK', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(440, 82, NULL, NULL, '2025-07-16 13:42:15', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(441, 86, NULL, NULL, '2025-07-16 14:53:11', '43.134.141.244', 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1', 'http://0ln.eu/BSvg1L', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(442, 87, NULL, NULL, '2025-07-16 14:54:06', '43.166.226.186', 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(443, 79, NULL, NULL, '2025-07-17 07:41:51', '20.171.207.132', 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(444, 87, NULL, NULL, '2025-07-17 07:41:56', '20.171.207.132', 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(445, 83, NULL, NULL, '2025-07-17 07:41:59', '20.171.207.236', 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(446, 82, NULL, NULL, '2025-07-17 07:42:01', '20.171.207.132', 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(447, 86, NULL, NULL, '2025-07-17 07:42:05', '20.171.207.236', 'Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; GPTBot/1.2; +https://openai.com/gptbot)', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(448, 41, NULL, NULL, '2025-07-17 10:45:41', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', '', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+(449, 61, NULL, NULL, '2025-07-17 11:00:23', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36', 'https://0ln.eu/terms/', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -731,14 +786,14 @@ INSERT INTO `urls` (`id`, `user_id`, `domain_id`, `short_code`, `original_url`, 
 (23, NULL, NULL, 'X9k7IN', 'https://adunti.net', '2025-07-10 20:41:22', 7, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (24, NULL, NULL, 'uHwUTE', 'https://proton.me', '2025-07-10 20:43:34', 7, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (25, NULL, NULL, 'hoQdJs', 'https://biblioteca.store', '2025-07-10 20:54:54', 6, NULL, NULL, NULL, 1, 1, NULL, NULL),
-(29, 1, NULL, 'guZSnU', 'https://www.elespanol.com/espana/politica/20250711/feijoo-no-critica-cronica-sanchez-admita-prostitucion-vino-bien-patrimonial/1003743843638_0.html', '2025-07-11 15:18:14', 18, NULL, NULL, NULL, 1, 1, NULL, NULL),
+(29, 1, NULL, 'guZSnU', 'https://www.elespanol.com/espana/politica/20250711/feijoo-no-critica-cronica-sanchez-admita-prostitucion-vino-bien-patrimonial/1003743843638_0.html', '2025-07-11 15:18:14', 20, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (30, 1, NULL, 'A3wBd6', 'https://adunti.net', '2025-07-11 15:35:36', 9, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (34, 1, NULL, '1yVssT', 'https://adunti.org/biblioteca', '2025-07-11 19:03:20', 4, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (35, 1, NULL, '5iY9DD', 'https://adunti.net/biblioteca', '2025-07-11 19:28:02', 5, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (36, 1, NULL, 'aGCvU7', 'https://amazon.com', '2025-07-11 20:56:14', 5, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (37, 1, NULL, 'yCvdMr', 'https://www.elespanol.com/espana/politica/20250712/pp-reprocha-sanchez-pacte-vertedero-moral-bildu-lleva-asesinos-listas-dirige-secuestrador/1003743845104_0.html', '2025-07-12 12:34:22', 7, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (40, 13, NULL, 'yhfdTJ', 'https://amzn.to/3R2pzir', '2025-07-12 17:00:46', 1, NULL, NULL, NULL, 1, 1, NULL, NULL),
-(41, 13, NULL, 'kvB1gX', 'https://adunti.net', '2025-07-12 18:29:26', 1, NULL, NULL, NULL, 1, 1, NULL, NULL),
+(41, 13, NULL, 'kvB1gX', 'https://adunti.net', '2025-07-12 18:29:26', 2, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (42, 13, NULL, '6dhxRG', 'https://adunti.org/biblioteca', '2025-07-12 21:19:12', 0, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (43, 1, NULL, 'gxSn1V', 'https://www.google.fr', '2025-07-12 22:05:46', 0, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (44, 1, 14, 'rE2JMu', 'https://hola.es', '2025-07-13 03:39:37', 1, NULL, NULL, NULL, 1, 1, NULL, NULL),
@@ -758,13 +813,17 @@ INSERT INTO `urls` (`id`, `user_id`, `domain_id`, `short_code`, `original_url`, 
 (58, 1, 0, 'EVYDFU', 'https://adunti.net', '2025-07-13 12:32:02', 2, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (59, 1, 14, 'KnIyVp', 'https://adunti.net', '2025-07-13 12:42:57', 1, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (60, 1, 14, 'liL38N', 'https://adunti.org/biblioteca', '2025-07-13 12:47:55', 1, NULL, NULL, NULL, 1, 1, NULL, NULL),
-(61, 1, 0, 'WOTLK', 'https://mega.nz/file/xqcxybJB#VLjNK5cSqfD0j-PmCeSha6YYay86tXJuO4HtEaqdJ84', '2025-07-13 14:13:12', 5, NULL, NULL, NULL, 1, 1, NULL, NULL),
+(61, 1, 0, 'WOTLK', 'https://mega.nz/file/xqcxybJB#VLjNK5cSqfD0j-PmCeSha6YYay86tXJuO4HtEaqdJ84', '2025-07-13 14:13:12', 6, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (64, 1, 0, 'nextcloud', 'http://0ln.eu/nextcloud', '2025-07-13 15:31:29', 0, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (65, 1, 0, 'u6hcLr', 'https://adunti.net', '2025-07-13 16:43:57', 2, NULL, NULL, NULL, 1, 1, NULL, NULL),
-(66, 1, 14, 'Va6G9N', 'https://adunti.net', '2025-07-13 16:46:54', 6, NULL, NULL, NULL, 1, 1, NULL, NULL),
+(66, 1, 14, 'Va6G9N', 'https://adunti.net', '2025-07-13 16:46:54', 8, NULL, NULL, NULL, 1, 1, NULL, NULL),
 (67, 1, 16, 'b82sAz', 'https://hola.es', '2025-07-13 20:10:00', 0, NULL, NULL, NULL, 1, 1, NULL, NULL),
-(68, 1, 0, '3CdrZH', 'https://x.com/ROSAMARI_5/status/1944496601868943834', '2025-07-13 20:45:32', 12, NULL, NULL, NULL, 1, 1, NULL, NULL),
-(78, 14, 25, 'jQ9HXL', 'https://hola.es', '2025-07-14 18:44:12', 2, NULL, NULL, NULL, 1, 1, NULL, NULL);
+(68, 1, 0, '3CdrZH', 'https://x.com/ROSAMARI_5/status/1944496601868943834', '2025-07-13 20:45:32', 13, NULL, NULL, NULL, 1, 1, NULL, NULL),
+(79, 1, 14, 'dgjC0o', 'https://www.elespanol.com/espana/politica/20250714/gobierno-acuerda-illa-cataluna-recaude-irpf-junts-amenaza-tumbarlo-congreso/1003743846793_0.html', '2025-07-14 21:09:00', 13, NULL, NULL, NULL, 1, 1, NULL, NULL),
+(82, 11, 14, 'gVXjHh', 'https://hola.es', '2025-07-16 10:46:11', 3, NULL, NULL, NULL, 1, 1, NULL, NULL),
+(83, 1, NULL, 'dX5KCK', 'https://example.com', '2025-07-16 11:57:59', 2, NULL, NULL, NULL, 1, 1, NULL, NULL),
+(86, 12, 0, 'BSvg1L', 'https://proton.me', '2025-07-16 12:57:00', 2, NULL, NULL, NULL, 1, 1, NULL, NULL),
+(87, 12, 14, 'icm2g1', 'https://proton.me', '2025-07-16 13:46:30', 2, NULL, NULL, NULL, 1, 1, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -800,11 +859,12 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `email`, `password`, `full_name`, `status`, `role`, `created_at`, `updated_at`, `last_login`, `email_verified`, `verification_token`, `password_reset_token`, `password_reset_expires`, `banned_reason`, `banned_at`, `banned_by`, `failed_login_attempts`, `locked_until`, `is_active`) VALUES
-(1, 'admin', 'admin@localhost', '$2y$12$N4bcRGiENYKgWCNgs993LuFV8RCEiuUsMfe.hXq1upgqwxLRUSrmm', 'Administrador', 'active', 'admin', '2025-07-09 20:22:44', '2025-07-14 18:17:54', '2025-07-14 18:17:54', 1, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 1),
-(11, 'capitan', 'b@a.net', '$2y$12$pdzYpwYF/L8z7dSXiPvRQu6akfe4cmCfyVqNacFZGJiDl14496Hj6', '', 'active', 'user', '2025-07-12 12:45:21', '2025-07-14 16:50:25', '2025-07-14 16:50:25', 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 1),
-(12, 'Chino', 'chino@china.org', '$2y$12$oOLzbxiw22kZJ8hkVJxS9.lrEA1mLcQq7DyvN3dqZ0/Qa5FedgHUG', '', 'active', 'user', '2025-07-12 13:22:13', '2025-07-14 16:49:22', '2025-07-14 16:49:22', 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 1),
-(13, 'Antonio', 'budino@antonio.org', '$2y$12$JhsrPDK3gAIzt0kDV9523esjTotHnay7sPBmhQRnRUybR.oBrjcg6', '', 'active', 'admin', '2025-07-12 16:55:32', '2025-07-14 18:23:40', '2025-07-14 18:23:40', 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 1),
-(14, 'ana', 'anuska@0ln.org', '$2y$12$Nd1./mZl4ppKv75WPMIRbeGq33hMu75lgbuBYd9wan9H9RDf3cLCe', '', 'active', 'user', '2025-07-14 14:45:16', '2025-07-14 18:29:00', '2025-07-14 18:29:00', 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 1);
+(1, 'admin', 'admin@localhost', '$2y$12$N4bcRGiENYKgWCNgs993LuFV8RCEiuUsMfe.hXq1upgqwxLRUSrmm', 'Administrador', 'active', 'admin', '2025-07-09 20:22:44', '2025-07-17 10:57:42', '2025-07-17 10:57:42', 1, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 1),
+(11, 'capitan', 'b@a.net', '$2y$12$pdzYpwYF/L8z7dSXiPvRQu6akfe4cmCfyVqNacFZGJiDl14496Hj6', '', 'active', 'user', '2025-07-12 12:45:21', '2025-07-16 13:37:34', '2025-07-16 13:37:34', 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 1),
+(12, 'Chino', 'chino@china.org', '$2y$12$oOLzbxiw22kZJ8hkVJxS9.lrEA1mLcQq7DyvN3dqZ0/Qa5FedgHUG', '', 'active', 'user', '2025-07-12 13:22:13', '2025-07-17 10:37:57', '2025-07-17 10:37:57', 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 1),
+(13, 'Antonio', 'budino@antonio.org', '$2y$12$JhsrPDK3gAIzt0kDV9523esjTotHnay7sPBmhQRnRUybR.oBrjcg6', '', 'active', 'admin', '2025-07-12 16:55:32', '2025-07-17 10:45:04', '2025-07-17 10:45:04', 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 1),
+(14, 'ana', 'anuska@0ln.org', '$2y$12$Nd1./mZl4ppKv75WPMIRbeGq33hMu75lgbuBYd9wan9H9RDf3cLCe', '', 'active', 'user', '2025-07-14 14:45:16', '2025-07-15 11:23:00', '2025-07-14 19:10:13', 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 1),
+(16, 'Pollito', 'Pollo@avecrem.com', '$2y$12$7br9tFiyw0hpE3ncgBMpyu0GelrM6hi4MoIklfDo00fE3jUPhi3La', 'Pollo perez', 'active', 'user', '2025-07-15 18:00:14', '2025-07-16 06:18:10', '2025-07-16 06:18:10', 0, NULL, NULL, NULL, NULL, NULL, NULL, 0, NULL, 1);
 
 -- --------------------------------------------------------
 
@@ -857,7 +917,9 @@ INSERT INTO `user_audit_log` (`id`, `user_id`, `action`, `old_value`, `new_value
 (10, 1, 'password_changed', NULL, NULL, 13, '2025-07-13 20:28:25', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'),
 (11, 1, 'status_change', 'active', 'banned', 13, '2025-07-13 20:28:39', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'),
 (12, 1, 'status_change', 'banned', 'active', 13, '2025-07-13 20:28:42', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'),
-(13, 14, 'user_created', NULL, 'ana', 1, '2025-07-14 14:45:16', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36');
+(13, 14, 'user_created', NULL, 'ana', 1, '2025-07-14 14:45:16', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'),
+(14, 14, 'role_change', 'user', 'admin', 1, '2025-07-15 11:22:57', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'),
+(15, 14, 'role_change', 'admin', 'user', 1, '2025-07-15 11:23:00', '62.99.100.233', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36');
 
 -- --------------------------------------------------------
 
@@ -921,6 +983,16 @@ ALTER TABLE `api_keys`
   ADD UNIQUE KEY `key_hash` (`key_hash`),
   ADD KEY `user_id` (`user_id`),
   ADD KEY `expires_at` (`expires_at`);
+
+--
+-- Indices de la tabla `api_tokens`
+--
+ALTER TABLE `api_tokens`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `token` (`token`),
+  ADD KEY `idx_token` (`token`),
+  ADD KEY `idx_user` (`user_id`),
+  ADD KEY `idx_active` (`is_active`);
 
 --
 -- Indices de la tabla `click_stats`
@@ -1068,10 +1140,16 @@ ALTER TABLE `api_keys`
   MODIFY `id` int NOT NULL AUTO_INCREMENT;
 
 --
+-- AUTO_INCREMENT de la tabla `api_tokens`
+--
+ALTER TABLE `api_tokens`
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+
+--
 -- AUTO_INCREMENT de la tabla `click_stats`
 --
 ALTER TABLE `click_stats`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=420;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=450;
 
 --
 -- AUTO_INCREMENT de la tabla `config`
@@ -1107,13 +1185,13 @@ ALTER TABLE `system_settings`
 -- AUTO_INCREMENT de la tabla `urls`
 --
 ALTER TABLE `urls`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=79;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=88;
 
 --
 -- AUTO_INCREMENT de la tabla `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=15;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- AUTO_INCREMENT de la tabla `user_activity`
@@ -1125,7 +1203,7 @@ ALTER TABLE `user_activity`
 -- AUTO_INCREMENT de la tabla `user_audit_log`
 --
 ALTER TABLE `user_audit_log`
-  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+  MODIFY `id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- AUTO_INCREMENT de la tabla `user_sessions`
@@ -1142,6 +1220,12 @@ ALTER TABLE `user_sessions`
 --
 ALTER TABLE `api_keys`
   ADD CONSTRAINT `api_keys_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+--
+-- Filtros para la tabla `api_tokens`
+--
+ALTER TABLE `api_tokens`
+  ADD CONSTRAINT `api_tokens_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
 
 --
 -- Filtros para la tabla `click_stats`
