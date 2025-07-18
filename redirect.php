@@ -145,6 +145,141 @@ if ($url) {
     
     // Si llegamos aquí, el dominio es correcto, proceder con la redirección
     
+    // NUEVO: DETECTAR BOTS DE REDES SOCIALES
+    $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+    $is_bot = false;
+    
+    // Lista de bots de redes sociales
+    $social_bots = [
+        'facebookexternalhit',
+        'Facebot',
+        'Twitterbot',
+        'LinkedInBot',
+        'WhatsApp',
+        'TelegramBot',
+        'Slackbot',
+        'Discord',
+        'Applebot',
+        'Pinterestbot',
+        'Skype'
+    ];
+    
+    foreach ($social_bots as $bot) {
+        if (stripos($user_agent, $bot) !== false) {
+            $is_bot = true;
+            break;
+        }
+    }
+    
+    // SI ES UN BOT DE REDES SOCIALES, MOSTRAR META TAGS
+    if ($is_bot) {
+        // Función para obtener meta tags
+        function getMetaTags($url_to_fetch) {
+            $default = [
+                'title' => 'Ver contenido',
+                'description' => 'Haz clic para ver el contenido completo',
+                'image' => ''
+            ];
+            
+            // Configurar contexto con timeout
+            $context = stream_context_create([
+                'http' => [
+                    'timeout' => 5,
+                    'user_agent' => 'Mozilla/5.0 (compatible; URLShortener/1.0)',
+                    'follow_location' => true
+                ]
+            ]);
+            
+            // Obtener contenido (solo primeros 50KB para no cargar todo)
+            $html = @file_get_contents($url_to_fetch, false, $context, 0, 50000);
+            
+            if (!$html) {
+                return $default;
+            }
+            
+            $result = $default;
+            
+            // Obtener título
+            if (preg_match('/<meta\s+property=["\']og:title["\']\s+content=["\'](.*?)["\']/i', $html, $matches)) {
+                $result['title'] = html_entity_decode($matches[1], ENT_QUOTES, 'UTF-8');
+            } elseif (preg_match('/<title[^>]*>(.*?)<\/title>/is', $html, $matches)) {
+                $result['title'] = html_entity_decode(trim(strip_tags($matches[1])), ENT_QUOTES, 'UTF-8');
+            }
+            
+            // Obtener descripción
+            if (preg_match('/<meta\s+property=["\']og:description["\']\s+content=["\'](.*?)["\']/i', $html, $matches)) {
+                $result['description'] = html_entity_decode($matches[1], ENT_QUOTES, 'UTF-8');
+            } elseif (preg_match('/<meta\s+name=["\']description["\']\s+content=["\'](.*?)["\']/i', $html, $matches)) {
+                $result['description'] = html_entity_decode($matches[1], ENT_QUOTES, 'UTF-8');
+            }
+            
+            // Obtener imagen
+            if (preg_match('/<meta\s+property=["\']og:image["\']\s+content=["\'](.*?)["\']/i', $html, $matches)) {
+                $result['image'] = $matches[1];
+                // Si la imagen es relativa, convertirla a absoluta
+                if (!filter_var($result['image'], FILTER_VALIDATE_URL)) {
+                    $parsed = parse_url($url_to_fetch);
+                    $base = $parsed['scheme'] . '://' . $parsed['host'];
+                    if (strpos($result['image'], '/') === 0) {
+                        $result['image'] = $base . $result['image'];
+                    } else {
+                        $result['image'] = $base . '/' . $result['image'];
+                    }
+                }
+            }
+            
+            return $result;
+        }
+        
+        // Obtener meta tags del sitio original
+        $meta_tags = getMetaTags($url['original_url']);
+        
+        // Construir la URL corta completa
+        $short_url = 'https://' . $current_domain . '/' . $short_code;
+        
+        // Mostrar página con meta tags para el bot
+        ?>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="<?php echo htmlspecialchars($meta_tags['title']); ?>">
+    <meta property="og:description" content="<?php echo htmlspecialchars($meta_tags['description']); ?>">
+    <?php if (!empty($meta_tags['image'])): ?>
+    <meta property="og:image" content="<?php echo htmlspecialchars($meta_tags['image']); ?>">
+    <?php endif; ?>
+    <meta property="og:url" content="<?php echo htmlspecialchars($short_url); ?>">
+    <meta property="og:type" content="website">
+    
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="<?php echo !empty($meta_tags['image']) ? 'summary_large_image' : 'summary'; ?>">
+    <meta name="twitter:title" content="<?php echo htmlspecialchars($meta_tags['title']); ?>">
+    <meta name="twitter:description" content="<?php echo htmlspecialchars($meta_tags['description']); ?>">
+    <?php if (!empty($meta_tags['image'])): ?>
+    <meta name="twitter:image" content="<?php echo htmlspecialchars($meta_tags['image']); ?>">
+    <?php endif; ?>
+    
+    <!-- Redirección automática para usuarios normales (por si acaso) -->
+    <meta http-equiv="refresh" content="1;url=<?php echo htmlspecialchars($url['original_url']); ?>">
+    
+    <title><?php echo htmlspecialchars($meta_tags['title']); ?></title>
+</head>
+<body>
+    <p>Redirigiendo...</p>
+    <script>
+        // Redirección por JavaScript como backup
+        window.location.href = "<?php echo htmlspecialchars($url['original_url']); ?>";
+    </script>
+</body>
+</html>
+        <?php
+        exit();
+    }
+    
+    // PARA USUARIOS NORMALES (NO BOTS): Proceder con redirección normal
+    
     // Incrementar contador de clicks
     $stmt = $pdo->prepare("UPDATE urls SET clicks = clicks + 1 WHERE id = ?");
     $stmt->execute([$url['id']]);
