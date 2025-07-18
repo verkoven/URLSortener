@@ -41,7 +41,76 @@ if ($section == 'domains' && !$is_superadmin) {
     $section = 'dashboard'; // Redirigir al dashboard
 }
 
-// NUEVA FUNCIONALIDAD: Procesar regeneración de token API
+// SECCIÓN DE TOKENS - Procesar acciones
+if ($section === 'tokens') {
+    // Generar nuevo token
+    if (isset($_POST['generate_token'])) {
+        $token_name = trim($_POST['token_name']) ?: 'API Token';
+        $token = bin2hex(random_bytes(32));
+        
+        try {
+            // Desactivar tokens anteriores si el usuario quiere solo uno activo
+            if (isset($_POST['single_token'])) {
+                $stmt = $db->prepare("UPDATE api_tokens SET is_active = 0 WHERE user_id = ?");
+                $stmt->execute([$user_id]);
+            }
+            
+            $stmt = $db->prepare("
+                INSERT INTO api_tokens (user_id, token, name, permissions, is_active) 
+                VALUES (?, ?, ?, ?, ?)
+            ");
+            $stmt->execute([$user_id, $token, $token_name, 'read', 1]);
+            
+            $message = "✅ Token creado exitosamente. ¡Cópialo ahora, no podrás verlo de nuevo!";
+            $messageType = 'success';
+            $_SESSION['new_token'] = $token; // Guardar temporalmente para mostrarlo
+            
+            logActivity($db, $user_id, 'create_token', "Creó token: $token_name");
+        } catch (Exception $e) {
+            $message = "❌ Error al crear el token: " . $e->getMessage();
+            $messageType = 'danger';
+        }
+    }
+    
+    // Eliminar token
+    if (isset($_POST['delete_token'])) {
+        $token_id = (int)$_POST['token_id'];
+        try {
+            $stmt = $db->prepare("DELETE FROM api_tokens WHERE id = ? AND user_id = ?");
+            $stmt->execute([$token_id, $user_id]);
+            
+            if ($stmt->rowCount() > 0) {
+                $message = "✅ Token eliminado correctamente";
+                $messageType = 'success';
+                logActivity($db, $user_id, 'delete_token', "Eliminó token ID: $token_id");
+            }
+        } catch (Exception $e) {
+            $message = "❌ Error al eliminar el token";
+            $messageType = 'danger';
+        }
+    }
+    
+    // Activar/Desactivar token
+    if (isset($_POST['toggle_token'])) {
+        $token_id = (int)$_POST['token_id'];
+        try {
+            $stmt = $db->prepare("
+                UPDATE api_tokens 
+                SET is_active = NOT is_active 
+                WHERE id = ? AND user_id = ?
+            ");
+            $stmt->execute([$token_id, $user_id]);
+            
+            $message = "✅ Estado del token actualizado";
+            $messageType = 'success';
+        } catch (Exception $e) {
+            $message = "❌ Error al actualizar el token";
+            $messageType = 'danger';
+        }
+    }
+}
+
+// NUEVA FUNCIONALIDAD: Procesar regeneración de token API (compatibilidad anterior)
 if (isset($_GET['action']) && $_GET['action'] === 'regenerate_token') {
     try {
         // Desactivar token anterior
@@ -50,7 +119,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'regenerate_token') {
         
         // Generar nuevo token
         $newToken = bin2hex(random_bytes(32));
-        $stmt = $db->prepare("INSERT INTO api_tokens (user_id, token) VALUES (?, ?)");
+        $stmt = $db->prepare("INSERT INTO api_tokens (user_id, token, name) VALUES (?, ?, 'Token Principal')");
         $stmt->execute([$user_id, $newToken]);
         
         $message = "✅ Token API regenerado correctamente";
@@ -58,20 +127,18 @@ if (isset($_GET['action']) && $_GET['action'] === 'regenerate_token') {
         logActivity($db, $user_id, 'regenerate_token', "Regeneró su token API");
         
         // Redirigir para limpiar la URL
-        header('Location: panel_simple.php?msg=token_regenerated');
+        header('Location: panel_simple.php?section=tokens&msg=token_regenerated');
         exit;
     } catch (Exception $e) {
         $message = "❌ Error al regenerar token: " . $e->getMessage();
         $messageType = 'danger';
     }
 }
-
 // Mostrar mensaje si viene de regeneración
 if (isset($_GET['msg']) && $_GET['msg'] == 'token_regenerated') {
     $message = "✅ Token API regenerado correctamente";
     $messageType = 'success';
 }
-
 // Función para registrar actividades
 function logActivity($db, $user_id, $action, $details) {
     try {
@@ -200,7 +267,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_url_id'])) {
         $messageType = 'danger';
     }
 }
-// Crear nueva URL desde el panel
 // Crear nueva URL desde el panel
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_url'])) {
     $original_url = trim($_POST['original_url']);
@@ -731,6 +797,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
             border-color: #667eea;
         }
         
+        /* Search Form */
+        .search-form {
+            margin-bottom: 0;
+        }
+        
+        .search-form .input-group {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+        }
+        
+        .search-form .form-control {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        /* Highlight search results */
+        mark {
+            background: #fff59d !important;
+            padding: 0 4px;
+            border-radius: 3px;
+            font-weight: 500;
+        }
+        
         /* Alertas */
         .alert {
             padding: 15px 20px;
@@ -903,6 +993,115 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
             gap: 10px;
         }
         
+        /* Token Cards */
+        .tokens-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .token-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            position: relative;
+            transition: all 0.3s;
+        }
+        
+        .token-card:hover {
+            border-color: #667eea;
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.1);
+        }
+        
+        .token-card.active {
+            border-color: #4caf50;
+        }
+        
+        .token-card.inactive {
+            opacity: 0.7;
+            border-color: #f44336;
+        }
+        
+        .token-status {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #f44336;
+        }
+        
+        .token-status.active {
+            background: #4caf50;
+            box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
+        }
+        
+        .token-name {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+        
+        .token-details {
+            font-size: 0.9em;
+            color: #7f8c8d;
+            margin-bottom: 15px;
+        }
+        
+        .token-preview {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 0.85em;
+            color: #495057;
+            margin-bottom: 15px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .new-token-display {
+            background: #e8f5e9;
+            border: 2px solid #4caf50;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .new-token-display h4 {
+            color: #2e7d32;
+            margin-bottom: 10px;
+        }
+        
+        .new-token-display .token-value {
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            word-break: break-all;
+            margin-bottom: 10px;
+        }
+        
+        /* Ejemplo de código */
+        .code-example {
+            background: #263238;
+            color: #aed581;
+            padding: 20px;
+            border-radius: 10px;
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+        
+        .code-example pre {
+            margin: 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+        
         /* Mapa */
         #geo-map {
             height: 500px;
@@ -983,6 +1182,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
             
             .token-actions .btn {
                 width: 100%;
+            }
+            
+            .tokens-grid {
+                grid-template-columns: 1fr;
             }
         }
         
@@ -1147,6 +1350,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
             border-radius: 5px;
             font-size: 0.9em;
         }
+        
+        /* Input group para búsqueda */
+        .input-group {
+            display: flex;
+            gap: 10px;
+            align-items: stretch;
+        }
+        
+        .input-group .form-control {
+            flex: 1;
+        }
     </style>
 </head>
 <body>
@@ -1177,8 +1391,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                 <a href="?section=urls" class="nav-item <?php echo $section === 'urls' ? 'active' : ''; ?>">
                     <span class="nav-icon">🔗</span> <?php echo $is_admin ? 'Gestión URLs' : 'Mis URLs'; ?>
                 </a>
-                <a href="?section=token" class="nav-item <?php echo $section === 'token' ? 'active' : ''; ?>">
-                    <span class="nav-icon">🔑</span> Token API
+                <a href="?section=tokens" class="nav-item <?php echo $section === 'tokens' ? 'active' : ''; ?>">
+                    <span class="nav-icon">🔑</span> Tokens API
                 </a>
                 <a href="?section=stats" class="nav-item <?php echo $section === 'stats' ? 'active' : ''; ?>">
                     <span class="nav-icon">📈</span> Estadísticas
@@ -1222,7 +1436,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                     switch($section) {
                         case 'dashboard': echo '📊 Dashboard'; break;
                         case 'urls': echo '🔗 ' . ($is_admin ? 'Gestión de URLs' : 'Mis URLs'); break;
-                        case 'token': echo '🔑 Token API'; break;
+                        case 'tokens': echo '🔑 Tokens API'; break;
                         case 'stats': echo '📈 Estadísticas'; break;
                         case 'geo': echo '🌍 Geolocalización'; break;
                         case 'domains': echo '🌐 Gestión de Dominios'; break;
@@ -1355,8 +1569,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                         <a href="?section=urls" class="btn btn-primary">
                             🔗 Ver URLs
                         </a>
-                        <a href="?section=token" class="btn btn-warning">
-                            🔑 Mi Token API
+                        <a href="?section=tokens" class="btn btn-warning">
+                            🔑 Mis Tokens API
                         </a>
                         <a href="?section=stats" class="btn btn-info">
                             📊 Estadísticas
@@ -1461,160 +1675,249 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                     <?php endif; ?>
                 </div>
                 
-            <!-- Token API -->
-            <?php elseif ($section === 'token'): ?>
+            <!-- Tokens API -->
+            <?php elseif ($section === 'tokens'): ?>
                 <?php
-                // Verificar si el usuario tiene token
-                $stmt = $db->prepare("SELECT token, created_at, last_used FROM api_tokens WHERE user_id = ? AND is_active = 1");
+                // Obtener tokens del usuario
+                $stmt = $db->prepare("
+                    SELECT * FROM api_tokens 
+                    WHERE user_id = ? 
+                    ORDER BY is_active DESC, created_at DESC
+                ");
                 $stmt->execute([$user_id]);
-                $tokenData = $stmt->fetch();
+                $tokens = $stmt->fetchAll();
                 
-                if (!$tokenData) {
-                    // Generar nuevo token
-                    $token = bin2hex(random_bytes(32));
-                    $stmt = $db->prepare("INSERT INTO api_tokens (user_id, token) VALUES (?, ?)");
-                    $stmt->execute([$user_id, $token]);
-                    $tokenData = ['token' => $token, 'created_at' => date('Y-m-d H:i:s'), 'last_used' => null];
-                }
+                // Mostrar nuevo token si se acaba de crear
+                $show_new_token = isset($_SESSION['new_token']);
+                $new_token = $_SESSION['new_token'] ?? '';
+                unset($_SESSION['new_token']);
                 ?>
                 
+                <?php if ($show_new_token): ?>
+                <div class="new-token-display">
+                    <h4>🎉 ¡Nuevo Token Creado!</h4>
+                    <div class="token-value">
+                        <?php echo htmlspecialchars($new_token); ?>
+                    </div>
+                    <div class="token-actions">
+                        <button class="btn btn-success" onclick="copyNewToken('<?php echo $new_token; ?>')">
+                            📋 Copiar Token
+                        </button>
+                    </div>
+                    <div class="token-warning">
+                        <span>⚠️</span>
+                        <div>
+                            <strong>¡Importante!</strong> Este es el único momento en que verás este token completo. 
+                            Cópialo ahora y guárdalo en un lugar seguro.
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+                
+                <!-- Crear Token -->
                 <div class="token-section">
                     <div class="token-header">
-                        <h3>🔑 Token API para Extensión Chrome</h3>
-                        <span class="badge badge-info">Personal e intransferible</span>
+                        <h3>🔑 Crear Nuevo Token API</h3>
+                        <span class="badge badge-info">Para extensión o API</span>
                     </div>
                     
-                    <div class="token-box">
-                        <div class="form-label">Tu Token API actual:</div>
-                        <div class="token-display" id="tokenDisplay">
-                            <?php echo htmlspecialchars($tokenData['token']); ?>
+                    <form method="POST" action="">
+                        <div class="form-group">
+                            <label class="form-label">Nombre del Token:</label>
+                            <input type="text" name="token_name" class="form-control" 
+                                   placeholder="Ej: Extensión Chrome, API Personal, etc." 
+                                   maxlength="100">
+                            <small style="color: #7f8c8d;">Dale un nombre descriptivo para identificarlo después</small>
                         </div>
                         
-                        <div class="token-actions">
-                            <button class="btn btn-primary" onclick="copyToken()">
-                                <span id="copyIcon">📋</span> Copiar Token
-                            </button>
-                            <button class="btn btn-warning" onclick="confirmRegenerate()">
-                                🔄 Regenerar Token
-                            </button>
+                        <div class="form-group">
+                            <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                                <input type="checkbox" name="single_token" value="1">
+                                <span>Mantener solo un token activo (desactiva los anteriores)</span>
+                            </label>
                         </div>
                         
-                        <div style="margin-top: 15px;">
-                            <small class="text-muted">
-                                <strong>Creado:</strong> <?php echo date('d/m/Y H:i', strtotime($tokenData['created_at'])); ?><br>
-                                <strong>Último uso:</strong> <?php echo $tokenData['last_used'] ? date('d/m/Y H:i', strtotime($tokenData['last_used'])) : 'Nunca'; ?>
-                            </small>
-                        </div>
-                    </div>
+                        <button type="submit" name="generate_token" class="btn btn-primary">
+                            🔑 Generar Nuevo Token
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- Lista de Tokens -->
+                <div class="data-table">
+                    <h3>
+                        <span>📋 Mis Tokens API</span>
+                        <span class="badge badge-primary"><?php echo count($tokens); ?></span>
+                    </h3>
                     
-                    <div class="token-info">
-                        <h4>📋 ¿Cómo usar este token?</h4>
-                        <ol>
-                            <li>Instala la extensión "<strong>Gestor de URLs Cortas</strong>" desde Chrome Web Store</li>
-                            <li>Haz clic en el icono de la extensión en tu navegador</li>
-                            <li>Pulsa el botón "📥 <strong>Importar de 0ln.eu</strong>"</li>
-                            <li>Cuando te pida el token, pega el que has copiado arriba</li>
-                            <li>¡Listo! La extensión importará automáticamente todas tus URLs</li>
-                        </ol>
-                        
-                        <div class="token-warning">
-                            <span style="font-size: 1.2em;">⚠️</span>
-                            <div>
-                                <strong>Importante:</strong> Este token es como una contraseña. No lo compartas con nadie. 
-                                Si crees que alguien más lo tiene, regenera uno nuevo inmediatamente.
+                    <?php if (empty($tokens)): ?>
+                    <div class="empty-state">
+                        <span style="font-size: 4em;">🔐</span>
+                        <h4>No tienes tokens activos</h4>
+                        <p>Crea un token para usar la API o la extensión del navegador</p>
+                    </div>
+                    <?php else: ?>
+                    <div class="tokens-grid">
+                        <?php foreach ($tokens as $token): ?>
+                        <div class="token-card <?php echo $token['is_active'] ? 'active' : 'inactive'; ?>">
+                            <div class="token-status <?php echo $token['is_active'] ? 'active' : ''; ?>"></div>
+                            <div class="token-name">
+                                🔑 <?php echo htmlspecialchars($token['name']); ?>
+                            </div>
+                            <div class="token-details">
+                                <div>📅 Creado: <?php echo date('d/m/Y H:i', strtotime($token['created_at'])); ?></div>
+                                <div>🕐 Último uso: <?php echo $token['last_used'] ? date('d/m/Y H:i', strtotime($token['last_used'])) : 'Nunca'; ?></div>
+                                <div>📊 Permisos: <span class="badge badge-info"><?php echo $token['permissions']; ?></span></div>
+                                <div>✅ Estado: <span class="badge badge-<?php echo $token['is_active'] ? 'success' : 'danger'; ?>">
+                                    <?php echo $token['is_active'] ? 'Activo' : 'Inactivo'; ?>
+                                </span></div>
+                            </div>
+                            <div class="token-preview">
+                                <?php echo substr($token['token'], 0, 20); ?>...
+                            </div>
+                            <div class="token-actions">
+                                <form method="POST" style="display: inline;">
+                                    <input type="hidden" name="token_id" value="<?php echo $token['id']; ?>">
+                                    <button type="submit" name="toggle_token" 
+                                            class="btn btn-sm btn-<?php echo $token['is_active'] ? 'warning' : 'success'; ?>">
+                                        <?php echo $token['is_active'] ? '⏸️ Desactivar' : '▶️ Activar'; ?>
+                                    </button>
+                                </form>
+                                <form method="POST" style="display: inline;" 
+                                      onsubmit="return confirm('¿Eliminar este token? Esta acción no se puede deshacer.');">
+                                    <input type="hidden" name="token_id" value="<?php echo $token['id']; ?>">
+                                    <button type="submit" name="delete_token" class="btn btn-sm btn-danger">
+                                        🗑️ Eliminar
+                                    </button>
+                                </form>
                             </div>
                         </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+                </div>
+                
+                <!-- Instrucciones de Uso -->
+                <div class="token-info">
+                    <h4>📖 Cómo usar los tokens API</h4>
+                    
+                    <h5 style="margin-top: 20px;">🧩 En la extensión del navegador:</h5>
+                    <ol>
+                        <li>Instala la extensión "URL Shortener" desde Chrome Web Store</li>
+                        <li>Haz clic en el icono de la extensión</li>
+                        <li>Ve a configuración y pega tu token</li>
+                        <li>¡Listo! Ya puedes acortar URLs desde cualquier página</li>
+                    </ol>
+                    
+                    <h5 style="margin-top: 20px;">💻 En peticiones HTTP:</h5>
+                    <div class="code-example">
+                        <pre>// Opción 1: Authorization Header (Recomendado)
+Authorization: Bearer TU_TOKEN_AQUI
+
+// Opción 2: Custom Header
+X-API-Token: TU_TOKEN_AQUI</pre>
                     </div>
                     
-                    <div class="data-table" style="margin-top: 30px;">
-                        <h3>🔌 Información de la API</h3>
-                        <table>
-                            <tr>
-                                <td><strong>Endpoint API:</strong></td>
-                                <td><code>https://<?php echo $_SERVER['HTTP_HOST']; ?>/api/my-urls.php</code></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Método:</strong></td>
-                                <td><code>GET</code></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Header requerido:</strong></td>
-                                <td><code>Authorization: Bearer TU_TOKEN</code></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Respuesta:</strong></td>
-                                <td><code>JSON</code> con tus URLs</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Límite:</strong></td>
-                                <td>1000 URLs máximo por petición</td>
-                            </tr>
-                        </table>
+                    <h5 style="margin-top: 20px;">📡 Ejemplos de uso:</h5>
+                    <div class="code-example">
+                        <pre>// JavaScript/Fetch
+fetch('https://<?php echo $_SERVER['HTTP_HOST']; ?>/api/my-urls.php', {
+    headers: {
+        'Authorization': 'Bearer TU_TOKEN_AQUI'
+    }
+})
+.then(response => response.json())
+.then(data => console.log(data));
+
+// cURL
+curl -H "Authorization: Bearer TU_TOKEN_AQUI" \
+     https://<?php echo $_SERVER['HTTP_HOST']; ?>/api/my-urls.php
+
+// Python
+import requests
+headers = {'Authorization': 'Bearer TU_TOKEN_AQUI'}
+response = requests.get('https://<?php echo $_SERVER['HTTP_HOST']; ?>/api/my-urls.php', headers=headers)</pre>
                     </div>
                 </div>
                 
+                <!-- Información de la API -->
+                <div class="data-table" style="margin-top: 30px;">
+                    <h3>🔌 Endpoints de la API</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Endpoint</th>
+                                <th>Método</th>
+                                <th>Descripción</th>
+                                <th>Respuesta</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>/api/my-urls.php</code></td>
+                                <td><span class="badge badge-success">GET</span></td>
+                                <td>Obtener todas tus URLs</td>
+                                <td>Array de URLs en JSON</td>
+                            </tr>
+                            <tr>
+                                <td><code>/api/shorten.php</code></td>
+                                <td><span class="badge badge-warning">POST</span></td>
+                                <td>Crear nueva URL corta</td>
+                                <td>Objeto con URL creada</td>
+                            </tr>
+                            <tr>
+                                <td><code>/api/delete-url.php</code></td>
+                                <td><span class="badge badge-danger">DELETE</span></td>
+                                <td>Eliminar una URL</td>
+                                <td>Confirmación de éxito</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
                 <script>
-                function copyToken() {
-                    const tokenText = document.getElementById('tokenDisplay').textContent.trim();
-                    
-                    // Intentar usar la API moderna
+                function copyNewToken(token) {
                     if (navigator.clipboard && window.isSecureContext) {
-                        navigator.clipboard.writeText(tokenText).then(function() {
-                            showCopySuccess();
-                        }).catch(function() {
-                            fallbackCopy(tokenText);
+                        navigator.clipboard.writeText(token).then(function() {
+                            showToast('✅ Token copiado al portapapeles');
                         });
                     } else {
-                        fallbackCopy(tokenText);
-                    }
-                }
-                
-                function fallbackCopy(text) {
-                    const textArea = document.createElement('textarea');
-                    textArea.value = text;
-                    textArea.style.position = 'fixed';
-                    textArea.style.left = '-999999px';
-                    document.body.appendChild(textArea);
-                    textArea.select();
-                    
-                    try {
-                        document.execCommand('copy');
-                        showCopySuccess();
-                    } catch (err) {
-                        alert('Error al copiar. Por favor, selecciona y copia manualmente.');
-                    } finally {
+                        // Fallback
+                        const textArea = document.createElement('textarea');
+                        textArea.value = token;
+                        textArea.style.position = 'fixed';
+                        textArea.style.left = '-999999px';
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        try {
+                            document.execCommand('copy');
+                            showToast('✅ Token copiado al portapapeles');
+                        } catch (err) {
+                            alert('Error al copiar. Selecciona y copia manualmente.');
+                        }
                         document.body.removeChild(textArea);
                     }
                 }
                 
-                function showCopySuccess() {
-                    const copyIcon = document.getElementById('copyIcon');
-                    copyIcon.textContent = '✅';
-                    
-                    // Mostrar alerta temporal
-                    const alert = document.createElement('div');
-                    alert.className = 'alert alert-success';
-                    alert.style.position = 'fixed';
-                    alert.style.top = '20px';
-                    alert.style.right = '20px';
-                    alert.style.zIndex = '9999';
-                    alert.innerHTML = '✅ Token copiado al portapapeles';
-                    document.body.appendChild(alert);
+                function showToast(message) {
+                    const toast = document.createElement('div');
+                    toast.className = 'alert alert-success';
+                    toast.style.position = 'fixed';
+                    toast.style.top = '20px';
+                    toast.style.right = '20px';
+                    toast.style.zIndex = '9999';
+                    toast.innerHTML = message;
+                    document.body.appendChild(toast);
                     
                     setTimeout(() => {
-                        copyIcon.textContent = '📋';
-                        alert.remove();
-                    }, 2000);
-                }
-                
-                function confirmRegenerate() {
-                    if (confirm('⚠️ ¿Estás seguro?\n\nAl regenerar el token:\n• El token actual dejará de funcionar inmediatamente\n• Tendrás que actualizar el token en la extensión\n• No podrás recuperar el token anterior\n\n¿Continuar?')) {
-                        window.location.href = '?action=regenerate_token';
-                    }
+                        toast.style.opacity = '0';
+                        toast.style.transform = 'translateY(-20px)';
+                        setTimeout(() => toast.remove(), 300);
+                    }, 3000);
                 }
                 </script>
             
-            <!-- Gestión de URLs -->
+            <!-- Gestión de URLs CON BUSCADOR -->
             <?php elseif ($section === 'urls'): ?>
                 <?php
                 // CONSULTA MODIFICADA: Solo mostrar dominios disponibles para el usuario actual
@@ -1640,6 +1943,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                 }
                 ?>
                 
+                <!-- NUEVO: Buscador de URLs -->
+                <div class="data-table" style="margin-bottom: 30px;">
+                    <h3>🔍 Buscar URLs</h3>
+                    <form method="GET" action="" class="search-form">
+                        <input type="hidden" name="section" value="urls">
+                        <div class="input-group">
+                            <input type="text" 
+                                   name="search" 
+                                   class="form-control" 
+                                   placeholder="Buscar por URL original, código corto o dominio..." 
+                                   value="<?php echo htmlspecialchars($_GET['search'] ?? ''); ?>"
+                                   style="flex: 1;">
+                            <button type="submit" class="btn btn-primary">
+                                🔍 Buscar
+                            </button>
+                            <?php if (isset($_GET['search']) && !empty($_GET['search'])): ?>
+                            <a href="?section=urls" class="btn btn-secondary">
+                                ❌ Limpiar
+                            </a>
+                            <?php endif; ?>
+                        </div>
+                        <?php if (isset($_GET['search']) && !empty($_GET['search'])): ?>
+                        <div style="margin-top: 10px; color: #6c757d;">
+                            Buscando: "<strong><?php echo htmlspecialchars($_GET['search']); ?></strong>"
+                        </div>
+                        <?php endif; ?>
+                    </form>
+                </div>
+                
                 <!-- Formulario para crear nueva URL -->
                 <div class="data-table" style="margin-bottom: 30px;">
                     <h3>➕ Crear nueva URL</h3>
@@ -1653,8 +1985,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                         <div class="form-group">
                             <label class="form-label">Código personalizado (opcional):</label>
                             <input type="text" name="custom_code" class="form-control" 
-                                   placeholder="mi-codigo" pattern="[a-zA-Z0-9-_]+">
-                            <small style="color: #7f8c8d;">Deja vacío para generar automáticamente</small>
+                                   placeholder="mi-codigo" 
+                                   pattern="[a-zA-Z0-9-_]+"
+                                   maxlength="100">
+                            <small style="color: #7f8c8d;">Deja vacío para generar automáticamente (máximo 100 caracteres)</small>
                         </div>
                         <?php if (!empty($available_domains)): ?>
                         <div class="form-group">
@@ -1676,39 +2010,93 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                 </div>
                 
                 <?php
-                // Obtener URLs CON INFORMACIÓN DEL DOMINIO
+                // Obtener URLs CON BÚSQUEDA
+                $search_term = $_GET['search'] ?? '';
+                $urls = [];
+                $total_results = 0;
+                
                 try {
                     if ($is_admin) {
-                        $stmt = $db->query("
-                            SELECT u.*, users.username, cd.domain as custom_domain
-                            FROM urls u
-                            LEFT JOIN users ON u.user_id = users.id
-                            LEFT JOIN custom_domains cd ON u.domain_id = cd.id
-                            ORDER BY u.created_at DESC 
-                            LIMIT 100
-                        ");
+                        if (!empty($search_term)) {
+                            // Búsqueda para admin
+                            $search_param = '%' . $search_term . '%';
+                            $stmt = $db->prepare("
+                                SELECT u.*, users.username, cd.domain as custom_domain,
+                                       COUNT(*) OVER() as total_count
+                                FROM urls u
+                                LEFT JOIN users ON u.user_id = users.id
+                                LEFT JOIN custom_domains cd ON u.domain_id = cd.id
+                                WHERE u.original_url LIKE ? 
+                                   OR u.short_code LIKE ?
+                                   OR cd.domain LIKE ?
+                                ORDER BY u.created_at DESC 
+                                LIMIT 100
+                            ");
+                            $stmt->execute([$search_param, $search_param, $search_param]);
+                        } else {
+                            // Sin búsqueda - mostrar todas
+                            $stmt = $db->query("
+                                SELECT u.*, users.username, cd.domain as custom_domain
+                                FROM urls u
+                                LEFT JOIN users ON u.user_id = users.id
+                                LEFT JOIN custom_domains cd ON u.domain_id = cd.id
+                                ORDER BY u.created_at DESC 
+                                LIMIT 100
+                            ");
+                        }
                     } else {
-                        $stmt = $db->prepare("
-                            SELECT u.*, users.username, cd.domain as custom_domain
-                            FROM urls u
-                            LEFT JOIN users ON u.user_id = users.id
-                            LEFT JOIN custom_domains cd ON u.domain_id = cd.id
-                            WHERE u.user_id = ?
-                            ORDER BY u.created_at DESC 
-                            LIMIT 100
-                        ");
-                        $stmt->execute([$user_id]);
+                        if (!empty($search_term)) {
+                            // Búsqueda para usuario normal
+                            $search_param = '%' . $search_term . '%';
+                            $stmt = $db->prepare("
+                                SELECT u.*, users.username, cd.domain as custom_domain,
+                                       COUNT(*) OVER() as total_count
+                                FROM urls u
+                                LEFT JOIN users ON u.user_id = users.id
+                                LEFT JOIN custom_domains cd ON u.domain_id = cd.id
+                                WHERE u.user_id = ?
+                                  AND (u.original_url LIKE ? 
+                                       OR u.short_code LIKE ?
+                                       OR cd.domain LIKE ?)
+                                ORDER BY u.created_at DESC 
+                                LIMIT 100
+                            ");
+                            $stmt->execute([$user_id, $search_param, $search_param, $search_param]);
+                        } else {
+                            // Sin búsqueda - mostrar solo las del usuario
+                            $stmt = $db->prepare("
+                                SELECT u.*, users.username, cd.domain as custom_domain
+                                FROM urls u
+                                LEFT JOIN users ON u.user_id = users.id
+                                LEFT JOIN custom_domains cd ON u.domain_id = cd.id
+                                WHERE u.user_id = ?
+                                ORDER BY u.created_at DESC 
+                                LIMIT 100
+                            ");
+                            $stmt->execute([$user_id]);
+                        }
                     }
                     $urls = $stmt->fetchAll();
+                    
+                    // Obtener el total de resultados si hay búsqueda
+                    if (!empty($search_term) && !empty($urls)) {
+                        $total_results = $urls[0]['total_count'] ?? count($urls);
+                    }
                 } catch (Exception $e) {
                     $urls = [];
+                    $message = "Error en la búsqueda: " . $e->getMessage();
+                    $messageType = 'danger';
                 }
                 ?>
                 
                 <div class="data-table">
                     <h3>
                         <span>🔗 <?php echo $is_admin ? 'Todas las URLs' : 'Mis URLs'; ?></span>
-                        <span class="badge badge-primary"><?php echo count($urls); ?></span>
+                        <?php if (!empty($search_term)): ?>
+                            <span class="badge badge-info"><?php echo $total_results; ?> resultados</span>
+                        <?php else: ?>
+                            <span class="badge badge-primary"><?php echo count($urls); ?></span>
+                        <?php endif; ?>
                     </h3>
                     
                     <?php if ($urls): ?>
@@ -1740,6 +2128,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                                 $domain_display = parse_url(BASE_URL, PHP_URL_HOST);
                                 $domain_badge_class = 'badge-secondary';
                             }
+                            
+                            // RESALTAR coincidencias de búsqueda
+                            if (!empty($search_term)) {
+                                $highlighted_url = str_ireplace(
+                                    $search_term, 
+                                    '<mark style="background: yellow; padding: 0 2px;">' . htmlspecialchars($search_term) . '</mark>', 
+                                    htmlspecialchars($url['original_url'])
+                                );
+                                $highlighted_code = str_ireplace(
+                                    $search_term, 
+                                    '<mark style="background: yellow; padding: 0 2px;">' . htmlspecialchars($search_term) . '</mark>', 
+                                    htmlspecialchars($url['short_code'])
+                                );
+                            } else {
+                                $highlighted_url = htmlspecialchars($url['original_url']);
+                                $highlighted_code = htmlspecialchars($url['short_code']);
+                            }
                             ?>
                             <tr>
                                 <td><?php echo $url['id']; ?></td>
@@ -1748,7 +2153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                                        target="_blank" 
                                        style="color: #667eea; text-decoration: none; display: block; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
                                        title="<?php echo htmlspecialchars($url['original_url']); ?>">
-                                        <?php echo htmlspecialchars($url['original_url']); ?>
+                                        <?php echo $highlighted_url; ?>
                                     </a>
                                 </td>
                                 <td>
@@ -1805,11 +2210,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['domain_action'])) {
                             <?php endforeach; ?>
                         </tbody>
                     </table>
+                    
+                    <?php if (!empty($search_term) && $total_results > 100): ?>
+                    <div class="alert alert-info" style="margin-top: 20px;">
+                        ℹ️ Mostrando los primeros 100 resultados de <?php echo $total_results; ?> encontrados. 
+                        Refina tu búsqueda para ver resultados más específicos.
+                    </div>
+                    <?php endif; ?>
+                    
                     <?php else: ?>
                     <div class="empty-state">
-                        <span style="font-size: 4em;">🔗</span>
-                        <h4>No hay URLs registradas</h4>
-                        <p>Crea tu primera URL corta usando el formulario de arriba</p>
+                        <span style="font-size: 4em;">
+                            <?php echo !empty($search_term) ? '🔍' : '🔗'; ?>
+                        </span>
+                        <h4>
+                            <?php echo !empty($search_term) 
+                                ? 'No se encontraron URLs que coincidan con "' . htmlspecialchars($search_term) . '"' 
+                                : 'No hay URLs registradas'; ?>
+                        </h4>
+                        <p>
+                            <?php echo !empty($search_term) 
+                                ? 'Intenta con otros términos de búsqueda' 
+                                : 'Crea tu primera URL corta usando el formulario de arriba'; ?>
+                        </p>
+                        <?php if (!empty($search_term)): ?>
+                        <a href="?section=urls" class="btn btn-primary" style="margin-top: 20px;">
+                            ← Volver a todas las URLs
+                        </a>
+                        <?php endif; ?>
                     </div>
                     <?php endif; ?>
                 </div>
