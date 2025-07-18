@@ -4,7 +4,6 @@ require_once 'conf.php';
 // CONFIGURACIÓN DE SEGURIDAD - Cambia esto según necesites
 define('REQUIRE_LOGIN_TO_SHORTEN', true); // true = requiere login, false = público
 define('ALLOW_ANONYMOUS_VIEW', true);      // true = permite ver la página sin login
-
 // Verificar si el usuario está logueado
 $is_logged_in = isset($_SESSION['user_id']) || isset($_SESSION['admin_logged_in']);
 $user_id = $_SESSION['user_id'] ?? 1;
@@ -26,6 +25,8 @@ try {
 $message = '';
 $messageType = 'info';
 $shortened_url = '';
+$custom_code = ''; // Para mantener el código después del redirect
+
 // Procesar el formulario solo si está logueado o no se requiere login
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['url'])) {
     // Verificar nuevamente el login si es requerido
@@ -57,27 +58,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['url'])) {
                 }
             }
             
-            // Continuar solo si no hay errores
+            // Continuar solo si no hay errores previos
             if ($messageType !== 'danger') {
+                $code_created = false;
+                
                 // Generar código si no se proporcionó uno personalizado
                 if (empty($custom_code)) {
+                    // Generar código automático
                     do {
                         $custom_code = generateShortCode();
                         $stmt = $db->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
                         $stmt->execute([$custom_code]);
                     } while ($stmt->fetchColumn() > 0);
+                    $code_created = true;
                 } else {
-                    // Verificar que el código personalizado no existe
-                    $stmt = $db->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
-                    $stmt->execute([$custom_code]);
-                    if ($stmt->fetchColumn() > 0) {
-                        $message = '❌ Ese código ya está en uso. Por favor, elige otro.';
+                    // VALIDACIÓN MEJORADA del código personalizado
+                    if (!preg_match('/^[a-zA-Z0-9-_]+$/', $custom_code)) {
+                        $message = '❌ El código solo puede contener letras, números, guiones y guiones bajos.';
                         $messageType = 'danger';
-                        $custom_code = '';
+                    } elseif (strlen($custom_code) > 100) {
+                        $message = '❌ El código no puede tener más de 100 caracteres.';
+                        $messageType = 'danger';
+                    } else {
+                        // Verificar que el código personalizado no existe
+                        $stmt = $db->prepare("SELECT id FROM urls WHERE short_code = ?");
+                        $stmt->execute([$custom_code]);
+                        if ($stmt->fetch()) {
+                            $message = '❌ Ese código ya está en uso. Por favor, elige otro.';
+                            $messageType = 'danger';
+                        } else {
+                            $code_created = true;
+                        }
                     }
                 }
                 
-                if (!empty($custom_code)) {
+                // Si el código está listo, crear la URL
+                if ($code_created && $messageType !== 'danger') {
                     try {
                         // Insertar la URL con el user_id correcto
                         $stmt = $db->prepare("
@@ -86,20 +102,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['url'])) {
                         ");
                         $stmt->execute([$custom_code, $original_url, $user_id, $domain_id]);
                         
-                        // Obtener dominio si se seleccionó uno personalizado
-                        if ($domain_id) {
-                            $stmt = $db->prepare("SELECT domain FROM custom_domains WHERE id = ?");
-                            $stmt->execute([$domain_id]);
-                            $custom_domain = $stmt->fetch()['domain'];
-                            $shortened_url = "https://" . $custom_domain . "/" . $custom_code;
-                        } else {
-                            $shortened_url = rtrim(BASE_URL, '/') . '/' . $custom_code;
-                        }
+                        // IMPORTANTE: Guardar datos en sesión para mostrarlos después del redirect
+                        $_SESSION['last_shortened_code'] = $custom_code;
+                        $_SESSION['last_shortened_domain_id'] = $domain_id;
+                        $_SESSION['success_message'] = '✅ ¡URL acortada con éxito!';
                         
-                        $message = '✅ ¡URL acortada con éxito!';
-                        $messageType = 'success';
+                        // REDIRECT PARA EVITAR REENVÍO DEL FORMULARIO
+                        header('Location: ' . $_SERVER['PHP_SELF'] . '?success=1');
+                        exit();
+                        
                     } catch (PDOException $e) {
-                        $message = '❌ Error al crear la URL corta: ' . $e->getMessage();
+                        if ($e->getCode() == 23000) { // Duplicate entry
+                            $message = '❌ Ese código ya está en uso. Por favor, elige otro.';
+                        } else {
+                            $message = '❌ Error al crear la URL corta: ' . $e->getMessage();
+                        }
                         $messageType = 'danger';
                     }
                 }
@@ -107,6 +124,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['url'])) {
         }
     }
 }
+
+// PROCESAR EL ÉXITO DESPUÉS DEL REDIRECT
+if (isset($_GET['success']) && isset($_SESSION['last_shortened_code'])) {
+    $custom_code = $_SESSION['last_shortened_code'];
+    $domain_id = $_SESSION['last_shortened_domain_id'] ?? null;
+    
+    // Construir la URL corta
+    if ($domain_id) {
+        $stmt = $db->prepare("SELECT domain FROM custom_domains WHERE id = ?");
+        $stmt->execute([$domain_id]);
+        $result = $stmt->fetch();
+        $custom_domain = $result ? $result['domain'] : null;
+        if ($custom_domain) {
+            $shortened_url = "https://" . $custom_domain . "/" . $custom_code;
+        } else {
+            $shortened_url = rtrim(BASE_URL, '/') . '/' . $custom_code;
+        }
+    } else {
+        $shortened_url = rtrim(BASE_URL, '/') . '/' . $custom_code;
+    }
+    
+    $message = $_SESSION['success_message'] ?? '✅ ¡URL acortada con éxito!';
+    $messageType = 'success';
+    
+    // Limpiar las variables de sesión
+    unset($_SESSION['last_shortened_code']);
+    unset($_SESSION['last_shortened_domain_id']);
+    unset($_SESSION['success_message']);
+}
+
 // CONSULTA MODIFICADA: Obtener dominios disponibles según el usuario
 $available_domains = [];
 if ($is_logged_in) {
@@ -992,7 +1039,6 @@ if ($is_logged_in && $user_id > 1) {
     </p>
 </div>
 <?php endif; ?>
-
             
             <?php if (empty($shortened_url)): ?>
             <!-- URL Form -->
@@ -1029,9 +1075,11 @@ if ($is_logged_in && $user_id > 1) {
                                    name="custom_code" 
                                    class="form-control" 
                                    placeholder="mi-codigo-personal" 
-                                   pattern="[a-zA-Z0-9-_]+">
+                                   pattern="[a-zA-Z0-9-_]+"
+                                   maxlength="100"
+                                   title="Solo letras, números, guiones y guiones bajos (máximo 100 caracteres)">
                             <small style="color: #6c757d; display: block; margin-top: 5px;">
-                                Solo letras, números, guiones y guiones bajos
+                                Solo letras, números, guiones y guiones bajos (máximo 100 caracteres)
                             </small>
                         </div>
                         <?php if (!empty($available_domains)): ?>
@@ -1223,6 +1271,14 @@ if ($is_logged_in && $user_id > 1) {
         window.addEventListener('load', function() {
             document.getElementById('shortened-url').select();
         });
+        <?php endif; ?>
+        
+        // Limpiar el parámetro 'success' de la URL para evitar confusión
+        <?php if (isset($_GET['success'])): ?>
+        if (window.history.replaceState) {
+            const cleanUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+            window.history.replaceState({}, document.title, cleanUrl);
+        }
         <?php endif; ?>
     </script>
 </body>

@@ -201,6 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_url_id'])) {
     }
 }
 // Crear nueva URL desde el panel
+// Crear nueva URL desde el panel
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_url'])) {
     $original_url = trim($_POST['original_url']);
     $custom_code = trim($_POST['custom_code']);
@@ -235,17 +236,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_url'])) {
                     $stmt = $db->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
                     $stmt->execute([$custom_code]);
                 } while ($stmt->fetchColumn() > 0);
+            } else {
+                // VALIDACIÓN ACTUALIZADA: incluye longitud máxima
+                if (!preg_match('/^[a-zA-Z0-9-_]+$/', $custom_code)) {
+                    $message = '❌ El código solo puede contener letras, números, guiones y guiones bajos';
+                    $messageType = 'danger';
+                    $custom_code = '';
+                } elseif (strlen($custom_code) > 100) {
+                    $message = '❌ El código no puede tener más de 100 caracteres';
+                    $messageType = 'danger';
+                    $custom_code = '';
+                } else {
+                    // Verificar que no existe
+                    $stmt = $db->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
+                    $stmt->execute([$custom_code]);
+                    if ($stmt->fetchColumn() > 0) {
+                        $message = '❌ Ese código ya está en uso';
+                        $messageType = 'danger';
+                        $custom_code = '';
+                    }
+                }
             }
             
-            try {
-                $stmt = $db->prepare("INSERT INTO urls (short_code, original_url, user_id, domain_id, created_at) VALUES (?, ?, ?, ?, NOW())");
-                $stmt->execute([$custom_code, $original_url, $user_id, $domain_id]);
-                $message = '✅ URL creada exitosamente';
-                $messageType = 'success';
-                logActivity($db, $user_id, 'create_url', "Creó URL: $custom_code");
-            } catch (Exception $e) {
-                $message = '❌ Error al crear URL: ' . $e->getMessage();
-                $messageType = 'danger';
+            if (!empty($custom_code)) {
+                try {
+                    $stmt = $db->prepare("INSERT INTO urls (short_code, original_url, user_id, domain_id, created_at) VALUES (?, ?, ?, ?, NOW())");
+                    $stmt->execute([$custom_code, $original_url, $user_id, $domain_id]);
+                    $message = '✅ URL creada exitosamente';
+                    $messageType = 'success';
+                    logActivity($db, $user_id, 'create_url', "Creó URL: $custom_code");
+                } catch (Exception $e) {
+                    $message = '❌ Error al crear URL: ' . $e->getMessage();
+                    $messageType = 'danger';
+                }
             }
         }
     }

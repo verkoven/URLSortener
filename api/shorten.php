@@ -164,37 +164,47 @@ try {
     }
     
     // Generar o validar código
-    if (!empty($custom_code)) {
-        // Validar formato del código personalizado
-        if (!preg_match('/^[a-zA-Z0-9_-]+$/', $custom_code)) {
-            http_response_code(400);
-            echo json_encode([
-                'error' => 'INVALID_CODE_FORMAT',
-                'message' => 'Code must contain only letters, numbers, hyphens and underscores'
-            ]);
-            exit;
-        }
-        
-        // Verificar que no existe
-        $stmt = $db->prepare("SELECT id FROM urls WHERE short_code = ?");
-        $stmt->execute([$custom_code]);
-        if ($stmt->fetch()) {
-            http_response_code(409);
-            echo json_encode([
-                'error' => 'CODE_ALREADY_EXISTS',
-                'message' => 'This short code is already in use'
-            ]);
-            exit;
-        }
-    } else {
-        // Generar código automáticamente
-        do {
-            $custom_code = generateShortCode();
-            $stmt = $db->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
-            $stmt->execute([$custom_code]);
-        } while ($stmt->fetchColumn() > 0);
+// Generar o validar código
+if (!empty($custom_code)) {
+    // VALIDACIÓN ACTUALIZADA: incluye longitud máxima
+    if (strlen($custom_code) > 100) {
+        http_response_code(400);
+        echo json_encode([
+            'error' => 'CODE_TOO_LONG',
+            'message' => 'Code cannot be longer than 100 characters'
+        ]);
+        exit;
     }
     
+    // Validar formato del código personalizado
+    if (!preg_match('/^[a-zA-Z0-9_-]+$/', $custom_code)) {
+        http_response_code(400);
+        echo json_encode([
+            'error' => 'INVALID_CODE_FORMAT',
+            'message' => 'Code must contain only letters, numbers, hyphens and underscores'
+        ]);
+        exit;
+    }
+    
+    // Verificar que no existe
+    $stmt = $db->prepare("SELECT id FROM urls WHERE short_code = ?");
+    $stmt->execute([$custom_code]);
+    if ($stmt->fetch()) {
+        http_response_code(409);
+        echo json_encode([
+            'error' => 'CODE_ALREADY_EXISTS',
+            'message' => 'This short code is already in use'
+        ]);
+        exit;
+    }
+} else {
+    // Generar código automáticamente (mantiene 6 caracteres)
+    do {
+        $custom_code = generateShortCode();
+        $stmt = $db->prepare("SELECT COUNT(*) FROM urls WHERE short_code = ?");
+        $stmt->execute([$custom_code]);
+    } while ($stmt->fetchColumn() > 0);
+}
     // Insertar URL
     $stmt = $db->prepare("
         INSERT INTO urls (short_code, original_url, user_id, domain_id, created_at, active) 
