@@ -267,6 +267,7 @@ CREATE TABLE `api_tokens` (
   KEY `idx_active` (`is_active`),
   CONSTRAINT `fk_api_tokens_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+ALTER TABLE urls MODIFY COLUMN short_code VARCHAR(100) NOT NULL;
 
 -- -----------------------------------------------------
 -- 4. ACTUALIZAR TÍTULOS VACÍOS CON FORMATO MEJORADO
