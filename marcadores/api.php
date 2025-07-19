@@ -1,5 +1,5 @@
 <?php
-// api.php - API endpoints COMPLETOS con export_json
+// api.php - API endpoints COMPLETOS con analytics_summary CORREGIDO
 header('Content-Type: application/json');
 require_once 'config.php';
 require_once 'functions.php';
@@ -303,7 +303,7 @@ if ($action === 'get_url_stats') {
     exit;
 }
 
-// Obtener resumen rápido de analytics (para el widget del index)
+// Obtener resumen rápido de analytics (para el widget del index) - CORREGIDO
 if ($action === 'analytics_summary') {
     $user_id = getCurrentUserId();
     if (!$user_id) {
@@ -313,7 +313,7 @@ if ($action === 'analytics_summary') {
     }
     
     try {
-        // Stats básicas últimos 30 días (SOLO LECTURA)
+        // PRIMERO: Intentar obtener datos de url_analytics
         $stmt = $pdo->prepare("
             SELECT 
                 COUNT(*) as total_clicks,
@@ -324,36 +324,100 @@ if ($action === 'analytics_summary') {
             AND clicked_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
         ");
         $stmt->execute([$user_id]);
-        $summary = $stmt->fetch();
+        $analytics_summary = $stmt->fetch();
         
-        // Top URL del mes (SOLO LECTURA)
-        $stmt = $pdo->prepare("
-            SELECT 
-                u.short_code, 
-                u.title, 
-                COUNT(*) as clicks
-            FROM url_analytics ua
-            JOIN urls u ON ua.url_id = u.id
-            WHERE ua.user_id = ? 
-            AND ua.clicked_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-            GROUP BY ua.url_id
-            ORDER BY clicks DESC
-            LIMIT 1
-        ");
-        $stmt->execute([$user_id]);
-        $topUrl = $stmt->fetch();
+        // FALLBACK: Si no hay datos de analytics, usar datos de la tabla urls
+        if ($analytics_summary['total_clicks'] == 0) {
+            $stmt = $pdo->prepare("
+                SELECT 
+                    SUM(clicks) as total_clicks,
+                    COUNT(*) as urls_clicked,
+                    COUNT(CASE WHEN clicks > 0 THEN 1 END) as active_urls
+                FROM urls 
+                WHERE user_id = ?
+            ");
+            $stmt->execute([$user_id]);
+            $urls_summary = $stmt->fetch();
+            
+            // Usar datos de URLs si no hay analytics
+            $summary = [
+                'total_clicks' => (int)($urls_summary['total_clicks'] ?? 0),
+                'unique_visitors' => (int)($urls_summary['total_clicks'] ?? 0), // Aproximación
+                'urls_clicked' => (int)($urls_summary['urls_clicked'] ?? 0)
+            ];
+            
+            $source = 'urls_table';
+        } else {
+            $summary = [
+                'total_clicks' => (int)$analytics_summary['total_clicks'],
+                'unique_visitors' => (int)$analytics_summary['unique_visitors'],
+                'urls_clicked' => (int)$analytics_summary['urls_clicked']
+            ];
+            
+            $source = 'analytics_table';
+        }
+        
+        // Top URL del mes (intentar analytics primero, luego urls)
+        $topUrl = null;
+        try {
+            if ($source === 'analytics_table') {
+                $stmt = $pdo->prepare("
+                    SELECT 
+                        u.short_code, 
+                        u.title, 
+                        COUNT(*) as clicks
+                    FROM url_analytics ua
+                    JOIN urls u ON ua.url_id = u.id
+                    WHERE ua.user_id = ? 
+                    AND ua.clicked_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                    GROUP BY ua.url_id
+                    ORDER BY clicks DESC
+                    LIMIT 1
+                ");
+                $stmt->execute([$user_id]);
+                $topUrl = $stmt->fetch();
+            }
+            
+            // Fallback: usar datos de tabla urls
+            if (!$topUrl) {
+                $stmt = $pdo->prepare("
+                    SELECT 
+                        short_code, 
+                        title, 
+                        clicks
+                    FROM urls 
+                    WHERE user_id = ? 
+                    AND clicks > 0
+                    ORDER BY clicks DESC
+                    LIMIT 1
+                ");
+                $stmt->execute([$user_id]);
+                $topUrl = $stmt->fetch();
+            }
+        } catch (Exception $e) {
+            // Ignorar errores de top URL
+        }
         
         echo json_encode([
             'success' => true,
-            'summary' => $summary ?: ['total_clicks' => 0, 'unique_visitors' => 0, 'urls_clicked' => 0],
+            'summary' => $summary,
             'top_url' => $topUrl,
             'period' => 'Últimos 30 días',
+            'data_source' => $source,
             'generated_at' => date('Y-m-d H:i:s')
         ]);
         
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['success' => false, 'message' => 'Error: ' . $e->getMessage()]);
+        echo json_encode([
+            'success' => false, 
+            'message' => 'Error: ' . $e->getMessage(),
+            'fallback_data' => [
+                'total_clicks' => 0,
+                'unique_visitors' => 0, 
+                'urls_clicked' => 0
+            ]
+        ]);
     }
     exit;
 }
