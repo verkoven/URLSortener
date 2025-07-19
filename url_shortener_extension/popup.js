@@ -582,32 +582,71 @@ function copyUrl(index) {
     }
 }
 
-function deleteUrl(index) {
+// FUNCIÓN CORREGIDA - Elimina tanto local como del servidor
+async function deleteUrl(index) {
     const url = urls[index];
     if (!url) return;
     
-    // Cambiar el botón a confirmación
     const deleteBtn = document.querySelector(`.btn-delete[data-index="${index}"]`);
     const originalContent = deleteBtn.innerHTML;
     
-    // Si ya está en modo confirmación
     if (deleteBtn.classList.contains('confirm-delete')) {
-        // Eliminar
-        urls.splice(index, 1);
-        chrome.storage.local.set({ urls: urls }, function() {
+        try {
+            // Mostrar loading
+            deleteBtn.innerHTML = '⏳';
+            deleteBtn.disabled = true;
+            
+            // Extraer código de la URL
+            const urlObj = new URL(url.shortUrl);
+            const shortCode = urlObj.pathname.substring(1);
+            const domain = urlObj.hostname;
+            
+            // Intentar eliminar del servidor
+            try {
+                const response = await fetch(`https://${domain}/api/delete-url.php`, {
+                    method: 'POST', // POST es más compatible
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        code: shortCode
+                    })
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    if (!result.success) {
+                        console.log('No se pudo eliminar del servidor');
+                    }
+                }
+            } catch (serverError) {
+                // Si falla el servidor, continuar con eliminación local
+                console.log('Error de servidor, eliminando solo localmente');
+            }
+            
+            // Siempre eliminar localmente (incluso si falla el servidor)
+            urls.splice(index, 1);
+            await chrome.storage.local.set({ urls: urls });
             renderUrls();
             updateStats();
             showToast('🗑️ URL eliminada');
-        });
+            
+        } catch (error) {
+            console.error('Error:', error);
+            deleteBtn.innerHTML = originalContent;
+            deleteBtn.disabled = false;
+            deleteBtn.classList.remove('confirm-delete');
+            showToast('❌ Error al eliminar');
+        }
     } else {
         // Mostrar confirmación
         deleteBtn.classList.add('confirm-delete');
         deleteBtn.innerHTML = '✓?';
         deleteBtn.title = 'Click para confirmar';
         
-        // Resetear después de 3 segundos
         setTimeout(() => {
-            if (deleteBtn) {
+            if (deleteBtn && !deleteBtn.disabled) {
                 deleteBtn.classList.remove('confirm-delete');
                 deleteBtn.innerHTML = originalContent;
                 deleteBtn.title = 'Eliminar';
