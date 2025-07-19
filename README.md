@@ -392,3 +392,52 @@ WHERE u.id IS NULL OR us.id IS NULL;
 -- 4. Las consultas de limpieza están comentadas por seguridad
 -- 5. Verificar foreign keys antes de ejecutar
 -- =====================================================
+OPCIONALES PARA LA EXTENSION
+CREATE TABLE url_analytics (
+  id bigint(20) NOT NULL AUTO_INCREMENT,
+  url_id int(11) NOT NULL,
+  user_id int(11) NOT NULL,
+  short_code varchar(255) NOT NULL,
+  ip_address varchar(45) DEFAULT NULL,
+  user_agent text DEFAULT NULL,
+  referer text DEFAULT NULL,
+  country varchar(100) DEFAULT NULL,
+  country_code varchar(2) DEFAULT NULL,
+  city varchar(100) DEFAULT NULL,
+  device_type enum('desktop','mobile','tablet','bot') DEFAULT 'desktop',
+  browser varchar(100) DEFAULT NULL,
+  os varchar(100) DEFAULT NULL,
+  clicked_at timestamp DEFAULT CURRENT_TIMESTAMP,
+  session_id varchar(255) DEFAULT NULL,
+  PRIMARY KEY (id),
+  KEY idx_url_id (url_id),
+  KEY idx_user_id (user_id),
+  KEY idx_short_code (short_code),
+  KEY idx_clicked_at (clicked_at),
+  KEY idx_country (country_code),
+  KEY idx_device (device_type),
+  CONSTRAINT fk_analytics_url FOREIGN KEY (url_id) REFERENCES urls (id) ON DELETE CASCADE,
+  CONSTRAINT fk_analytics_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  CREATE TABLE daily_stats (
+  id int(11) NOT NULL AUTO_INCREMENT,
+  url_id int(11) NOT NULL,
+  user_id int(11) NOT NULL,
+  date date NOT NULL,
+  total_clicks int(11) DEFAULT 0,
+  unique_visitors int(11) DEFAULT 0,
+  desktop_clicks int(11) DEFAULT 0,
+  mobile_clicks int(11) DEFAULT 0,
+  tablet_clicks int(11) DEFAULT 0,
+  top_country varchar(100) DEFAULT NULL,
+  top_browser varchar(100) DEFAULT NULL,
+  created_at timestamp DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY unique_url_date (url_id, date),
+  KEY idx_user_date (user_id, date),
+  CONSTRAINT fk_daily_stats_url FOREIGN KEY (url_id) REFERENCES urls (id) ON DELETE CASCADE,
+  CONSTRAINT fk_daily_stats_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE INDEX idx_analytics_date_range ON url_analytics (clicked_at, user_id);
+CREATE INDEX idx_analytics_url_date ON url_analytics (url_id, clicked_at);
